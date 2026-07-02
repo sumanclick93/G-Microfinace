@@ -8,6 +8,58 @@ if (!isset($_SESSION['admin_id'])) {
     exit();
 }
 
+$message = '';
+if (isset($_SESSION['message'])) {
+    $message = $_SESSION['message'];
+    unset($_SESSION['message']);
+}
+
+// --- Handle Delete RD Action ---
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_rd' && isset($_POST['rd_id'])) {
+    $rd_id = intval($_POST['rd_id']);
+    
+    // Check if status is eligible for delete
+    $status_check_stmt = $conn->prepare("SELECT status FROM recurring_deposits WHERE id = ?");
+    $status_check_stmt->bind_param("i", $rd_id);
+    $status_check_stmt->execute();
+    $result = $status_check_stmt->get_result();
+    $status = ($result->num_rows > 0) ? $result->fetch_assoc()['status'] : '';
+    $status_check_stmt->close();
+
+    if (in_array($status, ['rejected', 'closed', 'matured', 'premature-closed'])) {
+        $conn->begin_transaction();
+        try {
+            // Delete associated RD payments
+            $del_payments = $conn->prepare("DELETE FROM rd_payments WHERE rd_id = ?");
+            $del_payments->bind_param("i", $rd_id);
+            $del_payments->execute();
+            $del_payments->close();
+
+            // Delete associated wallet transactions
+            $del_tx = $conn->prepare("DELETE FROM wallet_transactions WHERE rd_id = ?");
+            $del_tx->bind_param("i", $rd_id);
+            $del_tx->execute();
+            $del_tx->close();
+
+            // Delete RD itself
+            $del_rd = $conn->prepare("DELETE FROM recurring_deposits WHERE id = ?");
+            $del_rd->bind_param("i", $rd_id);
+            $del_rd->execute();
+            $del_rd->close();
+
+            $conn->commit();
+            $_SESSION['message'] = "<div class='alert alert-success'>Recurring Deposit and all its records deleted successfully.</div>";
+        } catch (mysqli_sql_exception $exception) {
+            $conn->rollback();
+            $_SESSION['message'] = "<div class='alert alert-danger'>Error deleting Recurring Deposit. Transaction rolled back.</div>";
+        }
+    } else {
+        $_SESSION['message'] = "<div class='alert alert-danger'>Only rejected or completed RDs can be deleted.</div>";
+    }
+    header("Location: all-rds.php");
+    exit();
+}
+
 // --- 2. Fetch data for filter dropdowns ---
 // Fetch all agents
 $agents_for_filter = [];
@@ -108,6 +160,7 @@ $stmt->close();
                                     <div class="title-header option-title">
                                         <h5>All Recurring Deposits</h5>
                                     </div>
+                                    <?php if (!empty($message)) echo $message; ?>
 
                                     <div class="card mb-4">
                                         <div class="card-body">
@@ -195,7 +248,12 @@ $stmt->close();
                                                                 <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucwords(str_replace('-', ' ', $rd['status'])); ?></span>
                                                             </td>
                                                             <td>
-                                                                <ul><li><a href="admin-rd-details.php?id=<?php echo $rd['id']; ?>" title="View RD Details"><i class="ri-eye-line"></i></a></li></ul>
+                                                                <ul>
+                                                                    <li><a href="admin-rd-details.php?id=<?php echo $rd['id']; ?>" title="View RD Details"><i class="ri-eye-line"></i></a></li>
+                                                                    <?php if (in_array($rd['status'], ['rejected', 'closed', 'matured', 'premature-closed'])): ?>
+                                                                        <li><a href="javascript:void(0)" onclick="confirmDeleteRD(<?php echo $rd['id']; ?>)" title="Delete RD" class="text-danger"><i class="ri-delete-bin-line"></i></a></li>
+                                                                    <?php endif; ?>
+                                                                </ul>
                                                             </td>
                                                         </tr>
                                                     <?php endforeach; ?>
@@ -212,5 +270,36 @@ $stmt->close();
         </div>
         <?php include('footer.php'); ?>
     </div>
+
+    <div class="modal fade" id="deleteRDModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="POST" action="all-rds.php">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Delete Recurring Deposit Record</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-danger"><strong>Warning:</strong> This action is permanent and cannot be undone.</p>
+                        <p>This will delete the RD record along with all associated payments and transaction histories.</p>
+                        <input type="hidden" name="rd_id" id="delete_rd_id">
+                        <input type="hidden" name="action" value="delete_rd">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Confirm Delete</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function confirmDeleteRD(id) {
+        document.getElementById('delete_rd_id').value = id;
+        var myModal = new bootstrap.Modal(document.getElementById('deleteRDModal'));
+        myModal.show();
+    }
+    </script>
 </body>
 </html>

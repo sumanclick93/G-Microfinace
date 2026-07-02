@@ -8,6 +8,58 @@ if (!isset($_SESSION['admin_id'])) {
     exit();
 }
 
+$message = '';
+if (isset($_SESSION['message'])) {
+    $message = $_SESSION['message'];
+    unset($_SESSION['message']);
+}
+
+// --- Handle Delete Loan Action ---
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_loan' && isset($_POST['loan_id'])) {
+    $loan_id = intval($_POST['loan_id']);
+    
+    // Check if status is eligible for delete
+    $status_check_stmt = $conn->prepare("SELECT status FROM loans WHERE id = ?");
+    $status_check_stmt->bind_param("i", $loan_id);
+    $status_check_stmt->execute();
+    $result = $status_check_stmt->get_result();
+    $status = ($result->num_rows > 0) ? $result->fetch_assoc()['status'] : '';
+    $status_check_stmt->close();
+
+    if (in_array($status, ['rejected', 'paid', 'closed'])) {
+        $conn->begin_transaction();
+        try {
+            // Delete associated payments
+            $del_payments = $conn->prepare("DELETE FROM payments WHERE loan_id = ?");
+            $del_payments->bind_param("i", $loan_id);
+            $del_payments->execute();
+            $del_payments->close();
+
+            // Delete associated wallet transactions
+            $del_tx = $conn->prepare("DELETE FROM wallet_transactions WHERE loan_id = ?");
+            $del_tx->bind_param("i", $loan_id);
+            $del_tx->execute();
+            $del_tx->close();
+
+            // Delete loan itself
+            $del_loan = $conn->prepare("DELETE FROM loans WHERE id = ?");
+            $del_loan->bind_param("i", $loan_id);
+            $del_loan->execute();
+            $del_loan->close();
+
+            $conn->commit();
+            $_SESSION['message'] = "<div class='alert alert-success'>Loan and all its records deleted successfully.</div>";
+        } catch (mysqli_sql_exception $exception) {
+            $conn->rollback();
+            $_SESSION['message'] = "<div class='alert alert-danger'>Error deleting loan. Transaction rolled back.</div>";
+        }
+    } else {
+        $_SESSION['message'] = "<div class='alert alert-danger'>Only rejected or completed loans can be deleted.</div>";
+    }
+    header("Location: all-loans.php");
+    exit();
+}
+
 // --- 2. Fetch data for filter dropdowns ---
 // Fetch all agents
 $agents_for_filter = [];
@@ -100,6 +152,7 @@ $stmt->close();
                                     <div class="title-header option-title">
                                         <h5>All Loan Applications</h5>
                                     </div>
+                                    <?php if (!empty($message)) echo $message; ?>
                                     
                                     <div class="card mb-4">
                                         <div class="card-body">
@@ -176,9 +229,14 @@ $stmt->close();
                                                                 ?>
                                                                 <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucfirst($loan['status']); ?></span>
                                                             </td>
-                                                            <td>
-                                                                <ul><li><a href="admin-loan-details.php?id=<?php echo $loan['id']; ?>" title="View Loan Details"><i class="ri-eye-line"></i></a></li></ul>
-                                                            </td>
+                                                             <td>
+                                                                 <ul>
+                                                                     <li><a href="admin-loan-details.php?id=<?php echo $loan['id']; ?>" title="View Loan Details"><i class="ri-eye-line"></i></a></li>
+                                                                     <?php if (in_array($loan['status'], ['rejected', 'paid', 'closed'])): ?>
+                                                                         <li><a href="javascript:void(0)" onclick="confirmDeleteLoan(<?php echo $loan['id']; ?>)" title="Delete Loan" class="text-danger"><i class="ri-delete-bin-line"></i></a></li>
+                                                                     <?php endif; ?>
+                                                                 </ul>
+                                                             </td>
                                                         </tr>
                                                     <?php endforeach; ?>
                                                 <?php endif; ?>
@@ -194,5 +252,36 @@ $stmt->close();
         </div>
         <?php include('footer.php'); ?>
     </div>
+
+    <div class="modal fade" id="deleteLoanModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="POST" action="all-loans.php">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Delete Loan Record</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-danger"><strong>Warning:</strong> This action is permanent and cannot be undone.</p>
+                        <p>This will delete the loan record along with all associated payments and transaction histories.</p>
+                        <input type="hidden" name="loan_id" id="delete_loan_id">
+                        <input type="hidden" name="action" value="delete_loan">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Confirm Delete</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function confirmDeleteLoan(id) {
+        document.getElementById('delete_loan_id').value = id;
+        var myModal = new bootstrap.Modal(document.getElementById('deleteLoanModal'));
+        myModal.show();
+    }
+    </script>
 </body>
 </html>

@@ -22,9 +22,54 @@ if (isset($_SESSION['message'])) {
     unset($_SESSION['message']);
 }
 
-// 3. Handle Admin Actions (Approve/Reject)
+// 3. Handle Admin Actions (Approve/Reject/Delete)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
+
+    if ($action == 'delete') {
+        // Fetch current status
+        $status_check_stmt = $conn->prepare("SELECT status FROM loans WHERE id = ?");
+        $status_check_stmt->bind_param("i", $loan_id);
+        $status_check_stmt->execute();
+        $result = $status_check_stmt->get_result();
+        $status = ($result->num_rows > 0) ? $result->fetch_assoc()['status'] : '';
+        $status_check_stmt->close();
+
+        if (in_array($status, ['rejected', 'paid', 'closed'])) {
+            $conn->begin_transaction();
+            try {
+                // Delete associated payments
+                $del_payments = $conn->prepare("DELETE FROM payments WHERE loan_id = ?");
+                $del_payments->bind_param("i", $loan_id);
+                $del_payments->execute();
+                $del_payments->close();
+
+                // Delete associated wallet transactions
+                $del_tx = $conn->prepare("DELETE FROM wallet_transactions WHERE loan_id = ?");
+                $del_tx->bind_param("i", $loan_id);
+                $del_tx->execute();
+                $del_tx->close();
+
+                // Delete loan itself
+                $del_loan = $conn->prepare("DELETE FROM loans WHERE id = ?");
+                $del_loan->bind_param("i", $loan_id);
+                $del_loan->execute();
+                $del_loan->close();
+
+                $conn->commit();
+                $_SESSION['message'] = "<div class='alert alert-success'>Loan and all its records deleted successfully.</div>";
+                header("Location: all-loans.php");
+                exit();
+            } catch (mysqli_sql_exception $exception) {
+                $conn->rollback();
+                $_SESSION['message'] = "<div class='alert alert-danger'>Error deleting loan. Transaction rolled back.</div>";
+            }
+        } else {
+            $_SESSION['message'] = "<div class='alert alert-danger'>Only rejected or completed loans can be deleted.</div>";
+        }
+        header("Location: admin-loan-details.php?id=" . $loan_id);
+        exit();
+    }
 
     // Fetch loan amount and agent_id for the transaction
     $loan_info_stmt = $conn->prepare("SELECT loan_amount, agent_id FROM loans WHERE id = ? AND status = 'pending'");
@@ -203,6 +248,15 @@ $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $l
                                 </div>
                             </div>
                             <?php endif; ?>
+
+                            <?php if (in_array($loan['status'], ['rejected', 'paid', 'closed'])): ?>
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-3">Admin Actions</h5>
+                                    <button class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteModal"><i class="ri-delete-bin-line me-1"></i> Delete Loan Record</button>
+                                </div>
+                            </div>
+                            <?php endif; ?>
                         </div>
 
                         <div class="col-lg-7">
@@ -265,6 +319,28 @@ $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $l
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-danger">Confirm Rejection</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="POST" action="admin-loan-details.php?id=<?php echo $loan_id; ?>">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Delete Loan Record</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-danger"><strong>Warning:</strong> This action is permanent and cannot be undone.</p>
+                        <p>This will delete the loan record along with all associated payments and transaction histories.</p>
+                        <input type="hidden" name="action" value="delete">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Confirm Delete</button>
                     </div>
                 </form>
             </div>
