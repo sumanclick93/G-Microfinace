@@ -1,0 +1,286 @@
+[18-Oct-2025 17:54:06 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Access denied for user 'microfinance_fund'@'localhost' to database 'microfinance_db' in /home/a496jmts6xq8/public_html/Super/config.php:9
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/config.php(9): mysqli->__construct()
+#1 /home/a496jmts6xq8/public_html/Super/profile-setting.php(3): include('/home/a496jmts6...')
+#2 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/config.php on line 9
+[18-Oct-2025 17:54:47 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Access denied for user 'microfinance_fund'@'localhost' to database 'microfinance_db' in /home/a496jmts6xq8/public_html/Super/config.php:9
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/config.php(9): mysqli->__construct()
+#1 /home/a496jmts6xq8/public_html/Super/profile-setting.php(3): include('/home/a496jmts6...')
+#2 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/config.php on line 9
+[18-Oct-2025 17:54:49 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Access denied for user 'microfinance_fund'@'localhost' to database 'microfinance_db' in /home/a496jmts6xq8/public_html/Super/config.php:9
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/config.php(9): mysqli->__construct()
+#1 /home/a496jmts6xq8/public_html/Super/profile-setting.php(3): include('/home/a496jmts6...')
+#2 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/config.php on line 9
+[18-Oct-2025 17:57:23 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Access denied for user 'microfinance_fund'@'localhost' to database 'microfinance_db' in /home/a496jmts6xq8/public_html/Super/config.php:9
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/config.php(9): mysqli->__construct()
+#1 /home/a496jmts6xq8/public_html/Super/profile-setting.php(8): include('/home/a496jmts6...')
+#2 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/config.php on line 9
+[19-Oct-2025 08:11:25 UTC] PHP Warning:  move_uploaded_file(uploads/avatars/admin_1_1760861485.jpg): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/profile-setting.php on line 47
+[19-Oct-2025 08:11:25 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/phpYiGWH9' to 'uploads/avatars/admin_1_1760861485.jpg' in /home/a496jmts6xq8/public_html/Super/profile-setting.php on line 47
+[19-Oct-2025 08:46:12 UTC] PHP Warning:  move_uploaded_file(uploads/aadhar_cards/68f4a554808bd3.31964006.png): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 44
+[19-Oct-2025 08:46:12 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/phpelDXef' to 'uploads/aadhar_cards/68f4a554808bd3.31964006.png' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 44
+[19-Oct-2025 08:46:12 UTC] PHP Warning:  move_uploaded_file(uploads/pan_cards/68f4a55480a351.58153984.jpg): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 44
+[19-Oct-2025 08:46:12 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/php7I7Gtd' to 'uploads/pan_cards/68f4a55480a351.58153984.jpg' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 44
+[19-Oct-2025 08:46:12 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Table 'microfinance_fund.agent_wallets' doesn't exist in /home/a496jmts6xq8/public_html/Super/add-new-agents.php:66
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/add-new-agents.php(66): mysqli->prepare()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 66
+[19-Oct-2025 08:49:27 UTC] PHP Warning:  move_uploaded_file(uploads/aadhar_cards/68f4a61712f539.01703424.png): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 44
+[19-Oct-2025 08:49:27 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/php6V0Nwk' to 'uploads/aadhar_cards/68f4a61712f539.01703424.png' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 44
+[19-Oct-2025 08:49:27 UTC] PHP Warning:  move_uploaded_file(uploads/pan_cards/68f4a617130b72.24200643.jpg): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 44
+[19-Oct-2025 08:49:27 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/phpecZ6MG' to 'uploads/pan_cards/68f4a617130b72.24200643.jpg' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 44
+[19-Oct-2025 08:49:27 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Table 'microfinance_fund.agent_wallets' doesn't exist in /home/a496jmts6xq8/public_html/Super/add-new-agents.php:66
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/add-new-agents.php(66): mysqli->prepare()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 66
+[19-Oct-2025 08:54:46 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Duplicate entry 'agentbinod007@gmail.com' for key 'email' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php:62
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/add-new-agents.php(62): mysqli_stmt->execute()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 62
+[19-Oct-2025 08:55:59 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Table 'microfinance_fund.agent_wallets' doesn't exist in /home/a496jmts6xq8/public_html/Super/add-new-agents.php:67
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/add-new-agents.php(67): mysqli->prepare()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 67
+[19-Oct-2025 09:14:41 UTC] PHP Warning:  move_uploaded_file(../Agent/upload/avatars/68f4ac014b70f0.64529924.jpg): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:14:41 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/phphgaaR4' to '../Agent/upload/avatars/68f4ac014b70f0.64529924.jpg' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:14:41 UTC] PHP Warning:  move_uploaded_file(../Agent/upload/aadhar_cards/68f4ac014b89c0.05363503.jpg): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:14:41 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/phpwFSKOh' to '../Agent/upload/aadhar_cards/68f4ac014b89c0.05363503.jpg' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:14:41 UTC] PHP Warning:  move_uploaded_file(../Agent/upload/pan_cards/68f4ac014b9674.83070146.jpg): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:14:41 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/phpb7LBNL' to '../Agent/upload/pan_cards/68f4ac014b9674.83070146.jpg' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:18:09 UTC] PHP Warning:  move_uploaded_file(../Agent/upload/avatars/68f4acd1912ff7.13767026.jpg): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:18:09 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/phpQCvfs3' to '../Agent/upload/avatars/68f4acd1912ff7.13767026.jpg' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:18:09 UTC] PHP Warning:  move_uploaded_file(../Agent/upload/aadhar_cards/68f4acd1914ed5.71496042.jpg): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:18:09 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/phpUufosn' to '../Agent/upload/aadhar_cards/68f4acd1914ed5.71496042.jpg' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:18:09 UTC] PHP Warning:  move_uploaded_file(../Agent/upload/pan_cards/68f4acd1915bf4.91722633.jpg): Failed to open stream: No such file or directory in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:18:09 UTC] PHP Warning:  move_uploaded_file(): Unable to move '/tmp/phpIWR5lI' to '../Agent/upload/pan_cards/68f4acd1915bf4.91722633.jpg' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 49
+[19-Oct-2025 09:35:46 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Table 'microfinance_fund.wallet_transactions' doesn't exist in /home/a496jmts6xq8/public_html/Super/agent-wallet.php:82
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-wallet.php(82): mysqli->prepare()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-wallet.php on line 82
+[19-Oct-2025 09:48:37 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Table 'microfinance_fund.wallet_transactions' doesn't exist in /home/a496jmts6xq8/public_html/Super/agent-wallet.php:82
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-wallet.php(82): mysqli->prepare()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-wallet.php on line 82
+[19-Oct-2025 10:57:55 UTC] PHP Warning:  Constant DB_HOST already defined in /home/a496jmts6xq8/public_html/Super/config.php on line 12
+[19-Oct-2025 10:59:22 UTC] PHP Warning:  Constant DB_HOST already defined in /home/a496jmts6xq8/public_html/Super/config.php on line 12
+[19-Oct-2025 10:59:26 UTC] PHP Warning:  Constant DB_HOST already defined in /home/a496jmts6xq8/public_html/Super/config.php on line 12
+[19-Oct-2025 10:59:29 UTC] PHP Warning:  Constant DB_HOST already defined in /home/a496jmts6xq8/public_html/Super/config.php on line 12
+[19-Oct-2025 10:59:34 UTC] PHP Warning:  Constant DB_HOST already defined in /home/a496jmts6xq8/public_html/Super/config.php on line 12
+[19-Oct-2025 11:00:40 UTC] PHP Warning:  Constant DB_HOST already defined in /home/a496jmts6xq8/public_html/Super/config.php on line 12
+[19-Oct-2025 11:00:44 UTC] PHP Warning:  Constant DB_HOST already defined in /home/a496jmts6xq8/public_html/Super/config.php on line 12
+[19-Oct-2025 11:00:45 UTC] PHP Warning:  Constant DB_HOST already defined in /home/a496jmts6xq8/public_html/Super/config.php on line 12
+[19-Oct-2025 11:00:48 UTC] PHP Warning:  Constant DB_HOST already defined in /home/a496jmts6xq8/public_html/Super/config.php on line 12
+[24-Oct-2025 09:47:36 UTC] PHP Fatal error:  Uncaught ArgumentCountError: The number of variables must match the number of parameters in the prepared statement in /home/a496jmts6xq8/public_html/Super/report-agent-performance.php:80
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/report-agent-performance.php(80): mysqli_stmt->bind_param()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/report-agent-performance.php on line 80
+[06-Dec-2025 13:08:45 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Duplicate entry 'lkjh000@gmail.com' for key 'email' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php:66
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/add-new-agents.php(66): mysqli_stmt->execute()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 66
+[06-Dec-2025 13:08:53 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Duplicate entry 'lkjh000@gmail.com' for key 'email' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php:66
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/add-new-agents.php(66): mysqli_stmt->execute()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 66
+[06-Dec-2025 13:09:31 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Duplicate entry 'lkjh000@gmail.com' for key 'email' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php:66
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/add-new-agents.php(66): mysqli_stmt->execute()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 66
+[06-Dec-2025 13:09:39 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Duplicate entry 'lkjh000@gmail.com' for key 'email' in /home/a496jmts6xq8/public_html/Super/add-new-agents.php:66
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/add-new-agents.php(66): mysqli_stmt->execute()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/add-new-agents.php on line 66
+[26-Mar-2026 14:40:07 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'a.agent_user_id' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/agent-financials.php:24
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-financials.php(24): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 24
+[26-Mar-2026 14:42:04 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'a.user_id' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/agent-financials.php:24
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-financials.php(24): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 24
+[26-Mar-2026 14:42:19 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'a.user_id' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/agent-financials.php:24
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-financials.php(24): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 24
+[26-Mar-2026 14:42:23 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'a.user_id' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/agent-financials.php:24
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-financials.php(24): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 24
+[26-Mar-2026 14:43:04 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'a.user_id' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/agent-financials.php:24
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-financials.php(24): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 24
+[26-Mar-2026 14:44:58 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'a.agent_id' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/agent-financials.php:26
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-financials.php(26): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 26
+[26-Mar-2026 15:45:48 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'a.agent_user_id' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/agent-financials.php:24
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-financials.php(24): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 24
+[26-Mar-2026 15:47:50 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'a.agent_user_id' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/agent-financials.php:24
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-financials.php(24): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 24
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Warning:  Undefined variable $wallet_balance in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 64
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Deprecated:  number_format(): Passing null to parameter #1 ($num) of type float is deprecated in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 64
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Warning:  Undefined variable $total_loans in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 65
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Deprecated:  number_format(): Passing null to parameter #1 ($num) of type float is deprecated in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 65
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Warning:  Undefined variable $total_rd in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 66
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Deprecated:  number_format(): Passing null to parameter #1 ($num) of type float is deprecated in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 66
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Warning:  Undefined variable $wallet_balance in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 64
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Deprecated:  number_format(): Passing null to parameter #1 ($num) of type float is deprecated in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 64
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Warning:  Undefined variable $total_loans in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 65
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Deprecated:  number_format(): Passing null to parameter #1 ($num) of type float is deprecated in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 65
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Warning:  Undefined variable $total_rd in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 66
+[26-Mar-2026 17:03:56 Asia/Kolkata] PHP Deprecated:  number_format(): Passing null to parameter #1 ($num) of type float is deprecated in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 66
+[26-Mar-2026 17:11:41 Asia/Kolkata] PHP Notice:  session_start(): Ignoring session_start() because a session is already active (started from /home/a496jmts6xq8/public_html/Super/config.php on line 26) in /home/a496jmts6xq8/public_html/Super/process-wallet-transaction.php on line 3
+[26-Mar-2026 17:11:53 Asia/Kolkata] PHP Notice:  session_start(): Ignoring session_start() because a session is already active (started from /home/a496jmts6xq8/public_html/Super/config.php on line 26) in /home/a496jmts6xq8/public_html/Super/process-wallet-transaction.php on line 3
+[26-Mar-2026 17:11:53 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'type' in 'INSERT INTO' in /home/a496jmts6xq8/public_html/Super/process-wallet-transaction.php:41
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/process-wallet-transaction.php(41): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/process-wallet-transaction.php on line 41
+[26-Mar-2026 17:19:14 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'created_at' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/agent-wallet-log.php:35
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/agent-wallet-log.php(35): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/agent-wallet-log.php on line 35
+[26-Mar-2026 17:40:08 Asia/Kolkata] PHP Warning:  Undefined variable $wallet_balance in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 91
+[26-Mar-2026 17:40:08 Asia/Kolkata] PHP Warning:  Undefined variable $wallet_balance in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 91
+[26-Mar-2026 17:40:25 Asia/Kolkata] PHP Warning:  Undefined variable $wallet_balance in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 91
+[26-Mar-2026 17:40:25 Asia/Kolkata] PHP Warning:  Undefined variable $wallet_balance in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 91
+[26-Mar-2026 17:40:36 Asia/Kolkata] PHP Warning:  Undefined variable $wallet_balance in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 91
+[26-Mar-2026 17:40:36 Asia/Kolkata] PHP Warning:  Undefined variable $wallet_balance in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 91
+[26-Mar-2026 17:40:48 Asia/Kolkata] PHP Warning:  Undefined variable $wallet_balance in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 91
+[26-Mar-2026 17:40:48 Asia/Kolkata] PHP Warning:  Undefined variable $wallet_balance in /home/a496jmts6xq8/public_html/Super/agent-financials.php on line 91
+[28-Mar-2026 14:10:25 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:11:55 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:13:33 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:13:49 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:13:57 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:14:03 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:14:05 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:14:11 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:14:50 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:23:08 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:23:21 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:23:42 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:27:55 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:28:05 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:28:16 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:28:29 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:28:33 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:28:39 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:28:48 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:35:14 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:35:45 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:35:58 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:41:16 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:41:24 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:41:29 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:41:36 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:41:38 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:41:42 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:41:45 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:41:51 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:42:21 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:42:29 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:42:40 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:45:18 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:45:36 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:45:41 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:46:44 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:49:59 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:50:06 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:50:08 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 14:52:39 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:21:31 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:31:06 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:31:27 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:31:29 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:34:42 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:35:15 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:35:52 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:35:53 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:48:39 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:52:31 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:53:08 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 15:57:40 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 16:00:46 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 16:04:58 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 16:05:02 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 16:05:33 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 16:09:56 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 16:12:26 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 17:03:30 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 17:03:43 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 17:07:54 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 17:10:36 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 17:17:38 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 17:20:16 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 17:20:57 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 17:23:47 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[28-Mar-2026 17:24:20 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[30-Mar-2026 11:22:00 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[30-Mar-2026 11:22:05 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[30-Mar-2026 11:22:16 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[30-Mar-2026 11:22:31 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[30-Mar-2026 11:24:42 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[30-Mar-2026 11:27:16 Asia/Kolkata] PHP Warning:  Undefined variable $current_page in /home/a496jmts6xq8/public_html/Super/sidebaar.php on line 75
+[31-Mar-2026 12:59:44 Asia/Kolkata] PHP Notice:  session_start(): Ignoring session_start() because a session is already active (started from /home/a496jmts6xq8/public_html/Super/collection-report.php on line 4) in /home/a496jmts6xq8/public_html/Super/config.php on line 26
+[31-Mar-2026 12:59:47 Asia/Kolkata] PHP Notice:  session_start(): Ignoring session_start() because a session is already active (started from /home/a496jmts6xq8/public_html/Super/collection-report.php on line 4) in /home/a496jmts6xq8/public_html/Super/config.php on line 26
+[31-Mar-2026 12:59:49 Asia/Kolkata] PHP Notice:  session_start(): Ignoring session_start() because a session is already active (started from /home/a496jmts6xq8/public_html/Super/collection-report.php on line 4) in /home/a496jmts6xq8/public_html/Super/config.php on line 26
+[31-Mar-2026 13:00:34 Asia/Kolkata] PHP Notice:  session_start(): Ignoring session_start() because a session is already active (started from /home/a496jmts6xq8/public_html/Super/collection-report.php on line 4) in /home/a496jmts6xq8/public_html/Super/config.php on line 26
+[31-Mar-2026 13:00:34 Asia/Kolkata] PHP Warning:  Undefined array key "agent_id" in /home/a496jmts6xq8/public_html/Super/collection-report.php on line 14
+[31-Mar-2026 13:00:34 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'l.principal_amount' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/collection-report.php:86
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/collection-report.php(86): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/collection-report.php on line 86
+[31-Mar-2026 13:00:57 Asia/Kolkata] PHP Notice:  session_start(): Ignoring session_start() because a session is already active (started from /home/a496jmts6xq8/public_html/Super/collection-report.php on line 4) in /home/a496jmts6xq8/public_html/Super/config.php on line 26
+[31-Mar-2026 13:08:02 Asia/Kolkata] PHP Warning:  Undefined variable $agent_id in /home/a496jmts6xq8/public_html/Super/collection-report.php on line 23
+[31-Mar-2026 13:08:02 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'ORDER BY c.full_name ASC' at line 7 in /home/a496jmts6xq8/public_html/Super/collection-report.php:26
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/collection-report.php(26): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/collection-report.php on line 26
+[31-Mar-2026 13:17:07 Asia/Kolkata] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'l.principal_amount' in 'SELECT' in /home/a496jmts6xq8/public_html/Super/collection-report.php:89
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/collection-report.php(89): mysqli->query()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/collection-report.php on line 89
+[31-Mar-2026 14:20:44 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /home/a496jmts6xq8/public_html/Super/admin-loan-details.php on line 235
+[31-Mar-2026 14:20:44 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /home/a496jmts6xq8/public_html/Super/admin-loan-details.php on line 235
+[31-Mar-2026 14:20:44 Asia/Kolkata] PHP Deprecated:  htmlspecialchars(): Passing null to parameter #1 ($string) of type string is deprecated in /home/a496jmts6xq8/public_html/Super/admin-loan-details.php on line 235
+[16-Apr-2026 17:12:59 Asia/Kolkata] PHP Fatal error:  Uncaught ValueError: mysqli_stmt::bind_param(): Argument #1 ($types) must only contain the "b", "d", "i", "s" type specifiers in /home/a496jmts6xq8/public_html/Super/profile-setting.php:90
+Stack trace:
+#0 /home/a496jmts6xq8/public_html/Super/profile-setting.php(90): mysqli_stmt->bind_param()
+#1 {main}
+  thrown in /home/a496jmts6xq8/public_html/Super/profile-setting.php on line 90
