@@ -274,7 +274,7 @@ usort($active_accounts, function($a, $b) {
 
             // Initialize Table
             var table = $('#collection_table').DataTable({
-                pageLength: 25,
+                pageLength: 100,
                 order: [],
                 dom: "t<'row mt-3'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
                 columnDefs: [

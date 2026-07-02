@@ -92,7 +92,7 @@ $(document).ready(function () {
             ordering: true,
             info: true,
             responsive: true,
-            pageLength: 25,
+            pageLength: 100,
             lengthMenu: [10, 25, 50, 100],
             columnDefs: !hasSerial ? [
                 {
