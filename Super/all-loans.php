@@ -83,12 +83,19 @@ $filter_agent_id = $_GET['agent_id'] ?? '';
 
 // --- 4. Build the dynamic SQL query based on filters ---
 $sql = "SELECT 
-            l.id, l.loan_amount, l.total_repayable_amount, l.status, l.application_date,
+            l.id, l.loan_amount, l.total_repayable_amount, l.status, l.application_date, l.tenure,
             c.full_name as customer_name, c.avatar as customer_avatar,
-            a.first_name as agent_first_name, a.last_name as agent_last_name
+            a.first_name as agent_first_name, a.last_name as agent_last_name,
+            IFNULL(p.paid_emis, 0) as paid_emis
         FROM loans l
         JOIN customers c ON l.customer_id = c.id
         JOIN agents a ON l.agent_id = a.id
+        LEFT JOIN (
+            SELECT loan_id, COUNT(*) as paid_emis 
+            FROM payments 
+            WHERE status = 'approved' 
+            GROUP BY loan_id
+        ) p ON l.id = p.loan_id
         WHERE 1=1"; // Start with a true condition to easily append AND clauses
 
 $params = [];
@@ -199,13 +206,13 @@ $stmt->close();
 
                                     <div class="table-responsive table-product">
                                         <table class="table all-package theme-table" id="table_id">
-                                            <thead>
-                                                <tr><th>Photo</th><th>Customer Name</th><th>Agent Name</th><th>Loan Amount</th><th>Application Date</th><th>Status</th><th>Details</th></tr>
-                                            </thead>
-                                            <tbody>
-                                                <?php if (empty($loans)) : ?>
-                                                    <tr><td colspan="7" class="text-center text-muted">No loans found matching your criteria.</td></tr>
-                                                <?php else : ?>
+                                             <thead>
+                                                 <tr><th>Photo</th><th>Customer Name</th><th>Agent Name</th><th>Loan Amount</th><th>EMIs (Paid/Total)</th><th>Application Date</th><th>Status</th><th>Details</th></tr>
+                                             </thead>
+                                             <tbody>
+                                                 <?php if (empty($loans)) : ?>
+                                                     <tr><td colspan="8" class="text-center text-muted">No loans found matching your criteria.</td></tr>
+                                                 <?php else : ?>
                                                     <?php foreach ($loans as $loan) : ?>
                                                         <tr>
                                                             <td>
@@ -216,8 +223,9 @@ $stmt->close();
                                                             </td>
                                                             <td><?php echo htmlspecialchars($loan['customer_name']); ?></td>
                                                             <td><?php echo htmlspecialchars($loan['agent_first_name'] . ' ' . $loan['agent_last_name']); ?></td>
-                                                            <td>₹<?php echo number_format($loan['loan_amount']); ?></td>
-                                                            <td><?php echo date('d M, Y', strtotime($loan['application_date'])); ?></td>
+                                                             <td>₹<?php echo number_format($loan['loan_amount']); ?></td>
+                                                             <td><strong><?php echo $loan['paid_emis'] . ' / ' . $loan['tenure']; ?></strong></td>
+                                                             <td><?php echo date('d M, Y', strtotime($loan['application_date'])); ?></td>
                                                             <td>
                                                                 <?php
                                                                     $status_color = 'secondary';

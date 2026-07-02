@@ -93,10 +93,17 @@ $sql = "SELECT
             c.full_name as customer_name,
             c.avatar as customer_avatar,
             a.first_name as agent_first_name,
-            a.last_name as agent_last_name
+            a.last_name as agent_last_name,
+            IFNULL(p.paid_installments, 0) as paid_installments
         FROM recurring_deposits rd
         JOIN customers c ON rd.customer_id = c.id
         JOIN agents a ON rd.agent_id = a.id
+        LEFT JOIN (
+            SELECT rd_id, COUNT(*) as paid_installments 
+            FROM rd_payments 
+            WHERE status = 'approved' 
+            GROUP BY rd_id
+        ) p ON rd.id = p.rd_id
         WHERE 1=1"; // Start with a true condition
 
 $params = [];
@@ -214,7 +221,7 @@ $stmt->close();
                                                     <th>Customer Name</th>
                                                     <th>Agent Name</th>
                                                     <th>Installment</th>
-                                                    <th>Tenure</th>
+                                                    <th>Installments (Paid/Total)</th>
                                                     <th>Start Date</th>
                                                     <th>Status</th>
                                                     <th>Details</th>
@@ -235,7 +242,7 @@ $stmt->close();
                                                             <td><?php echo htmlspecialchars($rd['customer_name']); ?></td>
                                                             <td><?php echo htmlspecialchars($rd['agent_first_name'] . ' ' . $rd['agent_last_name']); ?></td>
                                                             <td>₹<?php echo number_format($rd['deposit_amount']); ?> / <?php echo ucfirst($rd['repayment_cycle']);?></td>
-                                                            <td><?php echo $rd['tenure'] . ' ' . (($rd['tenure'] > 1) ? ucfirst($rd['repayment_cycle']).'s' : ucfirst($rd['repayment_cycle'])); ?></td>
+                                                            <td><strong><?php echo $rd['paid_installments'] . ' / ' . $rd['tenure']; ?></strong></td>
                                                             <td><?php echo date('d M, Y', strtotime($rd['start_date'])); ?></td>
                                                             <td>
                                                                 <?php

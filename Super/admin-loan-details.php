@@ -149,6 +149,7 @@ if ($result->num_rows > 0) {
 // 5. Fetch Payment History
 $payments = [];
 $total_paid = 0;
+$paid_emis_count = 0;
 // (rest of the PHP logic is unchanged)
 $stmt_payments = $conn->prepare("SELECT * FROM payments WHERE loan_id = ? ORDER BY payment_date DESC");
 $stmt_payments->bind_param("i", $loan_id);
@@ -157,7 +158,12 @@ $payments_result = $stmt_payments->get_result();
 if ($payments_result->num_rows > 0) {
     while ($row = $payments_result->fetch_assoc()) {
         $payments[] = $row;
-        $total_paid += $row['amount_paid'];
+        if ($row['status'] !== 'rejected') {
+            $total_paid += $row['amount_paid'];
+        }
+        if ($row['status'] === 'approved') {
+            $paid_emis_count++;
+        }
     }
 }
 $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $loan['total_repayable_amount']) * 100 : 0;
@@ -188,7 +194,8 @@ $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $l
                                         <li class="list-group-item d-flex justify-content-between"><strong>Principal Amount:</strong> ₹<?php echo number_format($loan['loan_amount'], 2); ?></li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Total Repayable:</strong> ₹<?php echo number_format($loan['total_repayable_amount'], 2); ?></li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Installment:</strong> ₹<?php echo number_format($loan['monthly_installment'], 2); ?></li>
-                                        <li class="list-group-item d-flex justify-content-between"><strong>Tenure:</strong> <?php echo $loan['tenure'] . ' ' . ucfirst($loan['repayment_cycle']) . 's'; ?></li>
+                                        <li class="list-group-item d-flex justify-content-between"><strong>Tenure (Total EMIs):</strong> <?php echo $loan['tenure'] . ' ' . ucfirst($loan['repayment_cycle']) . 's'; ?></li>
+                                        <li class="list-group-item d-flex justify-content-between"><strong>EMIs Paid:</strong> <span><strong><?php echo $paid_emis_count; ?></strong> of <?php echo $loan['tenure']; ?></span></li>
                                     </ul>
                                 </div>
                             </div>

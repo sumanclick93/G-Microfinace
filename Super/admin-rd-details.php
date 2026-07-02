@@ -146,9 +146,13 @@ $payments_result = $stmt_payments->get_result();
 if ($payments_result->num_rows > 0) {
     while ($row = $payments_result->fetch_assoc()) {
         $rd_payments[] = $row;
-        $total_principal_paid += $row['amount_paid'];
+        if ($row['status'] !== 'rejected') {
+            $total_principal_paid += $row['amount_paid'];
+        }
+        if ($row['status'] === 'approved') {
+            $installments_paid_count++;
+        }
     }
-    $installments_paid_count = $payments_result->num_rows;
 }
 $progress_percentage = ($rd['tenure'] > 0) ? ($installments_paid_count / $rd['tenure']) * 100 : 0;
 
@@ -185,7 +189,8 @@ $progress_percentage = ($rd['tenure'] > 0) ? ($installments_paid_count / $rd['te
                                             <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucwords(str_replace('-', ' ', $rd['status'])); ?></span>
                                         </li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Installment:</strong> ₹<?php echo number_format($rd['deposit_amount'], 2); ?> / <?php echo ucfirst($rd['repayment_cycle']); ?></li>
-                                        <li class="list-group-item d-flex justify-content-between"><strong>Tenure:</strong> <?php echo $rd['tenure']; ?> Installments</li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Tenure (Total):</strong> <?php echo $rd['tenure']; ?> Installments</li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Installments Paid:</strong> <span><strong><?php echo $installments_paid_count; ?></strong> of <?php echo $rd['tenure']; ?></span></li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Interest Rate:</strong> <?php echo $rd['interest_rate']; ?>% p.a.</li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Maturity Amount:</strong> ₹<?php echo number_format($rd['maturity_amount'], 2); ?></li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Start Date:</strong> <?php echo date('d M, Y', strtotime($rd['start_date'])); ?></li>
