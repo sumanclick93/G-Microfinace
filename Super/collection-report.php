@@ -15,12 +15,22 @@ $filter_type = isset($_GET['type']) ? $_GET['type'] : 'all';
 $filter_customer = isset($_GET['customer_id']) ? $_GET['customer_id'] : 'all';
 
 // Fetch all agents for the dropdown
-$agents_query = "SELECT id, first_name, last_name, username FROM agents ORDER BY first_name ASC";
-$agents_result = $conn->query($agents_query);
+$agents_result = null;
+try {
+    $agents_query = "SELECT id, first_name, last_name, username FROM agents ORDER BY first_name ASC";
+    $agents_result = $conn->query($agents_query);
+} catch (Throwable $e) {
+    // Ignore error for dropdown
+}
 
 // Fetch all customers for the dropdown
-$customers_query = "SELECT id, full_name FROM customers ORDER BY full_name ASC";
-$customers_result = $conn->query($customers_query);
+$customers_result = null;
+try {
+    $customers_query = "SELECT id, full_name FROM customers ORDER BY full_name ASC";
+    $customers_result = $conn->query($customers_query);
+} catch (Throwable $e) {
+    // Ignore error for dropdown
+}
 
 // Build the dynamic WHERE clause
 $where_clauses = [];
@@ -40,25 +50,25 @@ if ($filter_type === 'emi') {
     $where_clauses[] = "t.transaction_type IN ('emi-received', 'rd-received')";
 }
 
-if ($filter_agent !== 'all') {
+if ($filter_agent !== 'all' && !empty($filter_agent)) {
     $agent_id_safe = intval($filter_agent);
     $where_clauses[] = "t.agent_id = $agent_id_safe";
 }
 
-if ($filter_customer !== 'all') {
+if ($filter_customer !== 'all' && !empty($filter_customer)) {
     $customer_id_safe = intval($filter_customer);
     $where_clauses[] = "(l.customer_id = $customer_id_safe OR rd.customer_id = $customer_id_safe)";
 }
 
 $where_sql = implode(' AND ', $where_clauses);
 
-// Fetch ALL Detailed Data (Corrected l.loan_amount instead of principal_amount based on your schema)
+// Fetch ALL Detailed Data
 $details_query = "
     SELECT 
         t.agent_id, 
-        a.first_name, 
-        a.last_name, 
-        a.username, 
+        COALESCE(a.first_name, 'Unknown') as first_name, 
+        COALESCE(a.last_name, 'Agent') as last_name, 
+        COALESCE(a.username, 'N/A') as username, 
         t.transaction_type, 
         t.amount, 
         t.description, 
@@ -80,23 +90,30 @@ $details_query = "
         
         COALESCE(l.loan_amount, 0) as loan_principal,
         COALESCE(l.total_repayable_amount, 0) as loan_maturity,
-        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt WHERE wt.loan_id = l.id AND wt.transaction_type = 'emi-received') as loan_overall_paid,
-        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt WHERE wt.loan_id = t.loan_id AND wt.transaction_type = 'emi-received' AND wt.transaction_date <= t.transaction_date) as running_loan_paid,
+        (SELECT COALESCE(SUM(amount_paid), 0) FROM payments WHERE loan_id = l.id AND status != 'rejected') as loan_overall_paid,
+        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt WHERE wt.loan_id = t.loan_id AND wt.loan_id IS NOT NULL AND wt.loan_id > 0 AND wt.transaction_type = 'emi-received' AND wt.transaction_date <= t.transaction_date) as running_loan_paid,
         
         COALESCE((rd.deposit_amount * rd.tenure), 0) as rd_principal,
         COALESCE(rd.maturity_amount, 0) as rd_maturity,
-        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt2 WHERE wt2.rd_id = rd.id AND wt2.transaction_type = 'rd-received') as rd_overall_paid,
-        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt2 WHERE wt2.rd_id = t.rd_id AND wt2.transaction_type = 'rd-received' AND wt2.transaction_date <= t.transaction_date) as running_rd_paid
+        (SELECT COALESCE(SUM(amount_paid), 0) FROM rd_payments WHERE rd_id = rd.id AND status != 'rejected') as rd_overall_paid,
+        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt2 WHERE wt2.rd_id = t.rd_id AND wt2.rd_id IS NOT NULL AND wt2.rd_id > 0 AND wt2.transaction_type = 'rd-received' AND wt2.transaction_date <= t.transaction_date) as running_rd_paid
         
     FROM wallet_transactions t
-    JOIN agents a ON t.agent_id = a.id
+    LEFT JOIN agents a ON t.agent_id = a.id
     LEFT JOIN loans l ON t.loan_id = l.id
     LEFT JOIN recurring_deposits rd ON t.rd_id = rd.id
     LEFT JOIN customers c ON c.id = COALESCE(l.customer_id, rd.customer_id)
     WHERE $where_sql
     ORDER BY a.first_name ASC, t.transaction_date DESC
 ";
-$details_result = $conn->query($details_query);
+
+$details_result = null;
+$query_error = '';
+try {
+    $details_result = $conn->query($details_query);
+} catch (Throwable $e) {
+    $query_error = $e->getMessage();
+}
 
 // Process the data in PHP for 100% accurate deduplication
 $details_map = [];
@@ -104,8 +121,8 @@ $summary_stats = [];
 
 if ($details_result && $details_result->num_rows > 0) {
     while ($row = $details_result->fetch_assoc()) {
-        $aid = $row['agent_id'];
-        $type = $row['transaction_type'];
+        $aid = intval($row['agent_id']);
+        $type = !empty($row['transaction_type']) ? $row['transaction_type'] : 'unknown';
         $key = $aid . '_' . $type;
         
         // Save to Itemized Details Map
@@ -145,9 +162,9 @@ if ($details_result && $details_result->num_rows > 0) {
                 
                 // Calculate Loan Default Amount
                 $default_amt = 0;
-                if ($row['loan_status'] === 'defaulted') {
+                if (!empty($row['loan_status']) && $row['loan_status'] === 'defaulted') {
                     $default_amt = max(0, $rem);
-                } else if (in_array($row['loan_status'], ['active', 'approved'])) {
+                } else if (!empty($row['loan_status']) && in_array($row['loan_status'], ['active', 'approved'])) {
                     $approval_date_str = $row['loan_approval_date'];
                     if (!empty($approval_date_str) && $approval_date_str !== '0000-00-00' && $approval_date_str !== '0000-00-00 00:00:00') {
                         try {
@@ -158,7 +175,7 @@ if ($details_result && $details_result->num_rows > 0) {
 
                             if ($today > $approval_date) {
                                 $interval_str = '1 month';
-                                switch (strtolower($row['loan_repayment_cycle'])) {
+                                switch (strtolower((string)($row['loan_repayment_cycle'] ?? 'monthly'))) {
                                     case 'daily': $interval_str = '1 day'; break;
                                     case 'weekly': $interval_str = '1 week'; break;
                                     case 'monthly': $interval_str = '1 month'; break;
@@ -169,16 +186,16 @@ if ($details_result && $details_result->num_rows > 0) {
                                 
                                 $installments_due = 0;
                                 $temp_date = clone $approval_date;
-                                while ($temp_date < $today && $installments_due < (int)$row['loan_tenure']) {
+                                while ($temp_date < $today && $installments_due < (int)($row['loan_tenure'] ?? 0)) {
                                     $temp_date->modify('+' . $interval_str);
                                     if ($temp_date <= $today) {
                                         $installments_due++;
                                     }
                                 }
 
-                                $expected_paid = $installments_due * (float)$row['loan_monthly_installment'];
-                                $overdue = max(0.0, $expected_paid - floatval($row['loan_overall_paid']));
-                                $default_amt = min($overdue, $rem);
+                                $expected_paid = $installments_due * (float)($row['loan_monthly_installment'] ?? 0);
+                                $overdue = max(0.0, $expected_paid - floatval($row['loan_overall_paid'] ?? 0));
+                                $default_amt = min($overdue, max(0, $rem));
                             }
                         } catch (Exception $e) {
                             $default_amt = 0;
@@ -201,7 +218,7 @@ if ($details_result && $details_result->num_rows > 0) {
                 
                 // Calculate RD Default Amount
                 $default_amt = 0;
-                if (in_array($row['rd_status'], ['active', 'approved'])) {
+                if (!empty($row['rd_status']) && in_array($row['rd_status'], ['active', 'approved'])) {
                     $start_date_str = $row['rd_start_date'];
                     if (!empty($start_date_str) && $start_date_str !== '0000-00-00' && $start_date_str !== '0000-00-00 00:00:00') {
                         try {
@@ -212,7 +229,7 @@ if ($details_result && $details_result->num_rows > 0) {
 
                             if ($today > $rd_start_dt) {
                                 $interval_str = '1 month';
-                                switch (strtolower($row['rd_repayment_cycle'])) {
+                                switch (strtolower((string)($row['rd_repayment_cycle'] ?? 'monthly'))) {
                                     case 'daily': $interval_str = '1 day'; break;
                                     case 'weekly': $interval_str = '1 week'; break;
                                     case 'monthly': $interval_str = '1 month'; break;
@@ -223,16 +240,16 @@ if ($details_result && $details_result->num_rows > 0) {
 
                                 $installments_due = 0;
                                 $temp_date = clone $rd_start_dt;
-                                while ($temp_date < $today && $installments_due < (int)$row['rd_tenure']) {
+                                while ($temp_date < $today && $installments_due < (int)($row['rd_tenure'] ?? 0)) {
                                     $temp_date->modify('+' . $interval_str);
                                     if ($temp_date <= $today) {
                                         $installments_due++;
                                     }
                                 }
 
-                                $expected_paid = $installments_due * (float)$row['rd_deposit_amount'];
-                                $overdue = max(0.0, $expected_paid - floatval($row['rd_overall_paid']));
-                                $default_amt = min($overdue, $rem);
+                                $expected_paid = $installments_due * (float)($row['rd_deposit_amount'] ?? 0);
+                                $overdue = max(0.0, $expected_paid - floatval($row['rd_overall_paid'] ?? 0));
+                                $default_amt = min($overdue, max(0, $rem));
                             }
                         } catch (Exception $e) {
                             $default_amt = 0;
@@ -266,10 +283,10 @@ if ($details_result && $details_result->num_rows > 0) {
             <div class="page-body">
                 <div class="container-fluid">
                     
-                    <?php if(!empty($conn->error)): ?>
+                    <?php if(!empty($query_error) || !empty($conn->error)): ?>
                         <div class="alert alert-danger mt-4">
-                            <h5>Database Error!</h5>
-                            <p><?php echo $conn->error; ?></p>
+                            <h5>Database Query Error!</h5>
+                            <p><?php echo htmlspecialchars(!empty($query_error) ? $query_error : $conn->error); ?></p>
                         </div>
                     <?php endif; ?>
 

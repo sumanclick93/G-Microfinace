@@ -19,9 +19,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && isset($_P
     $action = $_POST['action'];
 
     if ($action === 'approve') {
+        // First get the loan_id for this payment
+        $get_loan = $conn->query("SELECT loan_id FROM payments WHERE id = " . intval($payment_id));
+        $loan_id = ($get_loan && $row_l = $get_loan->fetch_assoc()) ? intval($row_l['loan_id']) : 0;
+
         $stmt = $conn->prepare("UPDATE payments SET status = 'approved' WHERE id = ?");
         $stmt->bind_param("i", $payment_id);
         if ($stmt->execute()) {
+            if ($loan_id > 0) {
+                $check_loan = $conn->query("SELECT l.total_repayable_amount, COALESCE(SUM(p.amount_paid), 0) as paid FROM loans l LEFT JOIN payments p ON l.id = p.loan_id WHERE l.id = $loan_id AND p.status = 'approved'");
+                if ($check_loan && $row_loan = $check_loan->fetch_assoc()) {
+                    if (floatval($row_loan['paid']) >= floatval($row_loan['total_repayable_amount']) && floatval($row_loan['total_repayable_amount']) > 0) {
+                        $conn->query("UPDATE loans SET status = 'paid' WHERE id = $loan_id AND status NOT IN ('closed', 'paid')");
+                    }
+                }
+            }
             $_SESSION['message'] = "<div class='alert alert-success d-flex align-items-center'><i class='ri-check-line fs-4 me-2'></i> Loan payment approved and added to customer ledger.</div>";
         }
         $stmt->close();

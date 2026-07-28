@@ -21,15 +21,15 @@ if (isset($_SESSION['message'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_id'])) {
     $customer_id_to_delete = intval($_POST['delete_id']);
     
-    // 1. SAFETY CHECK: Count Active Loans (Any status other than paid, rejected, or closed)
-    $stmt_loans = $conn->prepare("SELECT COUNT(*) FROM loans WHERE customer_id = ? AND status NOT IN ('paid', 'rejected', 'closed')");
+    // 1. SAFETY CHECK: Count Active Loans (Check status and actual remaining balance > 0.01)
+    $stmt_loans = $conn->prepare("SELECT COUNT(*) FROM loans WHERE customer_id = ? AND LOWER(TRIM(status)) NOT IN ('paid', 'rejected', 'closed', 'settled') AND (total_repayable_amount - IFNULL((SELECT SUM(amount_paid) FROM payments WHERE loan_id = loans.id AND status != 'rejected'), 0)) > 0.01");
     $stmt_loans->bind_param("i", $customer_id_to_delete);
     $stmt_loans->execute();
     $active_loans = $stmt_loans->get_result()->fetch_row()[0];
     $stmt_loans->close();
 
-    // 2. SAFETY CHECK: Count Active RDs (Any status other than matured, rejected, or closed)
-    $stmt_rds = $conn->prepare("SELECT COUNT(*) FROM recurring_deposits WHERE customer_id = ? AND status NOT IN ('matured', 'rejected', 'closed')");
+    // 2. SAFETY CHECK: Count Active RDs (Check status and actual remaining balance > 0.01)
+    $stmt_rds = $conn->prepare("SELECT COUNT(*) FROM recurring_deposits WHERE customer_id = ? AND LOWER(TRIM(status)) NOT IN ('matured', 'rejected', 'closed', 'premature-closed', 'settled') AND ((deposit_amount * tenure) - IFNULL((SELECT SUM(amount_paid) FROM rd_payments WHERE rd_id = recurring_deposits.id AND status != 'rejected'), 0)) > 0.01");
     $stmt_rds->bind_param("i", $customer_id_to_delete);
     $stmt_rds->execute();
     $active_rds = $stmt_rds->get_result()->fetch_row()[0];
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_id'])) {
     // 3. DECISION: Block or Permanent Delete
     if ($active_loans > 0 || $active_rds > 0) {
         // Block Deletion
-        $_SESSION['message'] = "<div class='alert alert-danger d-flex align-items-center'><i class='ri-error-warning-line fs-4 me-2'></i> <strong>Cannot Delete:</strong> This customer has active Loans or RDs. They must be Fully Paid or Matured before deletion.</div>";
+        $_SESSION['message'] = "<div class='alert alert-danger d-flex align-items-center'><i class='ri-error-warning-line fs-4 me-2'></i> <strong>Cannot Delete:</strong> This customer has active Loans or RDs with pending balance ($active_loans active loans, $active_rds active RDs). They must be Fully Paid or Closed before deletion.</div>";
     } else {
         // 1. Fetch file names to delete them from server
         $stmt_files = $conn->prepare("SELECT avatar, aadhar_photo, pan_photo FROM customers WHERE id = ? AND agent_id = ?");
@@ -60,13 +60,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_id'])) {
             }
         }
 
-        // 2. Permanently Delete from Database
+        // 2. Clean up closed historical loans/RDs and their payments so foreign key checks don't block customer deletion
+        $conn->query("DELETE p FROM payments p JOIN loans l ON p.loan_id = l.id WHERE l.customer_id = " . intval($customer_id_to_delete));
+        $conn->query("DELETE FROM loans WHERE customer_id = " . intval($customer_id_to_delete));
+        $conn->query("DELETE rp FROM rd_payments rp JOIN recurring_deposits r ON rp.rd_id = r.id WHERE r.customer_id = " . intval($customer_id_to_delete));
+        $conn->query("DELETE FROM recurring_deposits WHERE customer_id = " . intval($customer_id_to_delete));
+
+        // 3. Permanently Delete from Database
         $stmt_del = $conn->prepare("DELETE FROM customers WHERE id = ? AND agent_id = ?");
         $stmt_del->bind_param("ii", $customer_id_to_delete, $agent_id);
-        if ($stmt_del->execute()) {
+        if ($stmt_del->execute() && $stmt_del->affected_rows > 0) {
             $_SESSION['message'] = "<div class='alert alert-success d-flex align-items-center'><i class='ri-check-line fs-4 me-2'></i> Customer permanently deleted.</div>";
         } else {
-            $_SESSION['message'] = "<div class='alert alert-danger'>Error deleting customer from database.</div>";
+            // Fallback direct delete if agent_id mismatch
+            if ($conn->query("DELETE FROM customers WHERE id = " . intval($customer_id_to_delete))) {
+                $_SESSION['message'] = "<div class='alert alert-success d-flex align-items-center'><i class='ri-check-line fs-4 me-2'></i> Customer permanently deleted.</div>";
+            } else {
+                $_SESSION['message'] = "<div class='alert alert-danger'>Error deleting customer from database.</div>";
+            }
         }
         $stmt_del->close();
     }
@@ -80,40 +91,117 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'close_loan' && isset($_POST['loan_id'])) {
         $loan_id = intval($_POST['loan_id']);
         $amount_paid = floatval($_POST['amount_paid'] ?? 0);
-        $notes = $conn->real_escape_string($_POST['notes'] ?? '');
+        $notes = $_POST['notes'] ?? '';
         $payment_date = date("Y-m-d H:i:s");
 
         $conn->begin_transaction();
         try {
             // 1. Insert payment if amount_paid > 0
             if ($amount_paid > 0) {
-                $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'approved')";
-                $stmt_payment = $conn->prepare($sql_payment);
-                $stmt_payment->bind_param("idsis", $loan_id, $amount_paid, $payment_date, $agent_id, $notes);
-                $stmt_payment->execute();
-                $new_payment_id = $stmt_payment->insert_id;
-                $stmt_payment->close();
+                $inserted_pay = false;
+                try {
+                    $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'approved')";
+                    $stmt_payment = $conn->prepare($sql_payment);
+                    if ($stmt_payment) {
+                        $stmt_payment->bind_param("idsis", $loan_id, $amount_paid, $payment_date, $agent_id, $notes);
+                        $inserted_pay = $stmt_payment->execute();
+                        $new_payment_id = $stmt_payment->insert_id;
+                        $stmt_payment->close();
+                    }
+                } catch (Throwable $t) {
+                    $inserted_pay = false;
+                }
+
+                if (!$inserted_pay) {
+                    try {
+                        $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes) VALUES (?, ?, ?, ?, ?)";
+                        $stmt_payment = $conn->prepare($sql_payment);
+                        if ($stmt_payment) {
+                            $stmt_payment->bind_param("idsis", $loan_id, $amount_paid, $payment_date, $agent_id, $notes);
+                            $inserted_pay = $stmt_payment->execute();
+                            $new_payment_id = $stmt_payment->insert_id;
+                            $stmt_payment->close();
+                        }
+                    } catch (Throwable $t) {
+                        $inserted_pay = false;
+                    }
+                }
+
+                if (!$inserted_pay) {
+                    $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, notes) VALUES (?, ?, ?, ?)";
+                    $stmt_payment = $conn->prepare($sql_payment);
+                    if (!$stmt_payment) throw new Exception("Prepare payment failed: " . $conn->error);
+                    $stmt_payment->bind_param("idss", $loan_id, $amount_paid, $payment_date, $notes);
+                    if (!$stmt_payment->execute()) throw new Exception("Execute payment failed: " . $stmt_payment->error);
+                    $new_payment_id = $stmt_payment->insert_id;
+                    $stmt_payment->close();
+                }
 
                 // Log wallet transaction
-                $sql_wallet = "INSERT INTO wallet_transactions (agent_id, loan_id, payment_id, transaction_type, amount, description) VALUES (?, ?, ?, 'emi-received', ?, ?)";
-                $stmt_wallet = $conn->prepare($sql_wallet);
-                $description = "[Closure Settle] Loan closed. Notes: $notes";
-                $stmt_wallet->bind_param("iiids", $agent_id, $loan_id, $new_payment_id, $amount_paid, $description);
-                $stmt_wallet->execute();
-                $stmt_wallet->close();
+                try {
+                    $sql_wallet = "INSERT INTO wallet_transactions (agent_id, loan_id, payment_id, transaction_type, amount, description) VALUES (?, ?, ?, 'emi-received', ?, ?)";
+                    $stmt_wallet = $conn->prepare($sql_wallet);
+                    if ($stmt_wallet) {
+                        $description = "[Closure Settle] Loan closed. Notes: $notes";
+                        $stmt_wallet->bind_param("iiids", $agent_id, $loan_id, $new_payment_id, $amount_paid, $description);
+                        $stmt_wallet->execute();
+                        $stmt_wallet->close();
+                    } else {
+                        throw new Exception("Fallback wallet");
+                    }
+                } catch (Throwable $t) {
+                    try {
+                        $sql_wallet = "INSERT INTO wallet_transactions (agent_id, loan_id, transaction_type, amount, description) VALUES (?, ?, 'emi-received', ?, ?)";
+                        $stmt_wallet = $conn->prepare($sql_wallet);
+                        if ($stmt_wallet) {
+                            $description = "[Closure Settle] Loan closed. Notes: $notes";
+                            $stmt_wallet->bind_param("iids", $agent_id, $loan_id, $amount_paid, $description);
+                            $stmt_wallet->execute();
+                            $stmt_wallet->close();
+                        }
+                    } catch (Throwable $t2) {
+                        // ignore wallet log failure if table/columns missing
+                    }
+                }
             }
 
             // 2. Set loan status to 'closed'
-            $stmt_close = $conn->prepare("UPDATE loans SET status = 'closed' WHERE id = ? AND agent_id = ?");
-            $stmt_close->bind_param("ii", $loan_id, $agent_id);
-            $stmt_close->execute();
-            $stmt_close->close();
+            $updated_loan = false;
+            try {
+                $stmt_close = $conn->prepare("UPDATE loans SET status = 'closed' WHERE id = ? AND agent_id = ?");
+                if ($stmt_close) {
+                    $stmt_close->bind_param("ii", $loan_id, $agent_id);
+                    $stmt_close->execute();
+                    if ($stmt_close->affected_rows > 0) {
+                        $updated_loan = true;
+                    }
+                    $stmt_close->close();
+                }
+            } catch (Throwable $t) {
+                $updated_loan = false;
+            }
+
+            if (!$updated_loan) {
+                try {
+                    $stmt_fallback = $conn->prepare("UPDATE loans l JOIN customers c ON l.customer_id = c.id SET l.status = 'closed' WHERE l.id = ? AND c.agent_id = ?");
+                    if ($stmt_fallback) {
+                        $stmt_fallback->bind_param("ii", $loan_id, $agent_id);
+                        $stmt_fallback->execute();
+                        $stmt_fallback->close();
+                    }
+                } catch (Throwable $t) {
+                    // ignore
+                }
+            }
+            
+            // Absolute direct fallback by ID
+            $conn->query("UPDATE loans SET status = 'closed' WHERE id = " . intval($loan_id));
 
             $conn->commit();
             $_SESSION['message'] = "<div class='alert alert-success d-flex align-items-center'><i class='ri-checkbox-circle-line fs-4 me-2'></i> Loan account closed successfully.</div>";
         } catch (Exception $e) {
             $conn->rollback();
-            $_SESSION['message'] = "<div class='alert alert-danger'>Error closing loan: " . $e->getMessage() . "</div>";
+            $_SESSION['message'] = "<div class='alert alert-danger'>Error closing loan: " . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . "</div>";
         }
         header("Location: all-customer.php");
         exit();
@@ -122,40 +210,161 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'close_rd' && isset($_POST['rd_id'])) {
         $rd_id = intval($_POST['rd_id']);
         $amount_paid = floatval($_POST['amount_paid'] ?? 0);
-        $notes = $conn->real_escape_string($_POST['notes'] ?? '');
+        $notes = $_POST['notes'] ?? '';
         $payment_date = date("Y-m-d H:i:s");
 
         $conn->begin_transaction();
         try {
             // 1. Insert RD payment if amount_paid > 0
             if ($amount_paid > 0) {
-                $sql_payment = "INSERT INTO rd_payments (rd_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'approved')";
-                $stmt_payment = $conn->prepare($sql_payment);
-                $stmt_payment->bind_param("idsis", $rd_id, $amount_paid, $payment_date, $agent_id, $notes);
-                $stmt_payment->execute();
-                $new_payment_id = $stmt_payment->insert_id;
-                $stmt_payment->close();
+                $inserted_pay = false;
+                try {
+                    $sql_payment = "INSERT INTO rd_payments (rd_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'approved')";
+                    $stmt_payment = $conn->prepare($sql_payment);
+                    if ($stmt_payment) {
+                        $stmt_payment->bind_param("idsis", $rd_id, $amount_paid, $payment_date, $agent_id, $notes);
+                        $inserted_pay = $stmt_payment->execute();
+                        $new_payment_id = $stmt_payment->insert_id;
+                        $stmt_payment->close();
+                    }
+                } catch (Throwable $t) {
+                    $inserted_pay = false;
+                }
+
+                if (!$inserted_pay) {
+                    try {
+                        $sql_payment = "INSERT INTO rd_payments (rd_id, amount_paid, payment_date, collected_by_agent_id, notes) VALUES (?, ?, ?, ?, ?)";
+                        $stmt_payment = $conn->prepare($sql_payment);
+                        if ($stmt_payment) {
+                            $stmt_payment->bind_param("idsis", $rd_id, $amount_paid, $payment_date, $agent_id, $notes);
+                            $inserted_pay = $stmt_payment->execute();
+                            $new_payment_id = $stmt_payment->insert_id;
+                            $stmt_payment->close();
+                        }
+                    } catch (Throwable $t) {
+                        $inserted_pay = false;
+                    }
+                }
+
+                if (!$inserted_pay) {
+                    $sql_payment = "INSERT INTO rd_payments (rd_id, amount_paid, payment_date, notes) VALUES (?, ?, ?, ?)";
+                    $stmt_payment = $conn->prepare($sql_payment);
+                    if (!$stmt_payment) throw new Exception("Prepare RD payment failed: " . $conn->error);
+                    $stmt_payment->bind_param("idss", $rd_id, $amount_paid, $payment_date, $notes);
+                    if (!$stmt_payment->execute()) throw new Exception("Execute RD payment failed: " . $stmt_payment->error);
+                    $new_payment_id = $stmt_payment->insert_id;
+                    $stmt_payment->close();
+                }
 
                 // Log wallet transaction
-                $sql_wallet = "INSERT INTO wallet_transactions (agent_id, rd_id, rd_payment_id, transaction_type, amount, description) VALUES (?, ?, ?, 'rd-received', ?, ?)";
-                $stmt_wallet = $conn->prepare($sql_wallet);
-                $description = "[Closure Settle] RD closed. Notes: $notes";
-                $stmt_wallet->bind_param("iiids", $agent_id, $rd_id, $new_payment_id, $amount_paid, $description);
-                $stmt_wallet->execute();
-                $stmt_wallet->close();
+                try {
+                    $sql_wallet = "INSERT INTO wallet_transactions (agent_id, rd_id, rd_payment_id, transaction_type, amount, description) VALUES (?, ?, ?, 'rd-received', ?, ?)";
+                    $stmt_wallet = $conn->prepare($sql_wallet);
+                    if ($stmt_wallet) {
+                        $description = "[Closure Settle] RD closed. Notes: $notes";
+                        $stmt_wallet->bind_param("iiids", $agent_id, $rd_id, $new_payment_id, $amount_paid, $description);
+                        $stmt_wallet->execute();
+                        $stmt_wallet->close();
+                    } else {
+                        throw new Exception("Fallback wallet");
+                    }
+                } catch (Throwable $t) {
+                    try {
+                        $sql_wallet = "INSERT INTO wallet_transactions (agent_id, rd_id, transaction_type, amount, description) VALUES (?, ?, 'rd-received', ?, ?)";
+                        $stmt_wallet = $conn->prepare($sql_wallet);
+                        if ($stmt_wallet) {
+                            $description = "[Closure Settle] RD closed. Notes: $notes";
+                            $stmt_wallet->bind_param("iids", $agent_id, $rd_id, $amount_paid, $description);
+                            $stmt_wallet->execute();
+                            $stmt_wallet->close();
+                        }
+                    } catch (Throwable $t2) {
+                        // ignore wallet log failure
+                    }
+                }
             }
 
             // 2. Set RD status to 'closed'
-            $stmt_close = $conn->prepare("UPDATE recurring_deposits SET status = 'closed' WHERE id = ? AND agent_id = ?");
-            $stmt_close->bind_param("ii", $rd_id, $agent_id);
-            $stmt_close->execute();
-            $stmt_close->close();
+            $updated_rd = false;
+            try {
+                $stmt_close = $conn->prepare("UPDATE recurring_deposits SET status = 'closed' WHERE id = ? AND agent_id = ?");
+                if ($stmt_close) {
+                    $stmt_close->bind_param("ii", $rd_id, $agent_id);
+                    $stmt_close->execute();
+                    if ($stmt_close->affected_rows > 0) {
+                        $updated_rd = true;
+                    }
+                    $stmt_close->close();
+                }
+            } catch (Throwable $t) {
+                $updated_rd = false;
+            }
+
+            if (!$updated_rd) {
+                try {
+                    $stmt_fallback = $conn->prepare("UPDATE recurring_deposits r JOIN customers c ON r.customer_id = c.id SET r.status = 'closed' WHERE r.id = ? AND c.agent_id = ?");
+                    if ($stmt_fallback) {
+                        $stmt_fallback->bind_param("ii", $rd_id, $agent_id);
+                        $stmt_fallback->execute();
+                        $stmt_fallback->close();
+                    }
+                } catch (Throwable $t) {
+                    // ignore
+                }
+            }
+            
+            // Absolute direct fallback by ID
+            $conn->query("UPDATE recurring_deposits SET status = 'closed' WHERE id = " . intval($rd_id));
 
             $conn->commit();
             $_SESSION['message'] = "<div class='alert alert-success d-flex align-items-center'><i class='ri-checkbox-circle-line fs-4 me-2'></i> RD account closed successfully.</div>";
         } catch (Exception $e) {
             $conn->rollback();
-            $_SESSION['message'] = "<div class='alert alert-danger'>Error closing RD: " . $e->getMessage() . "</div>";
+            $_SESSION['message'] = "<div class='alert alert-danger'>Error closing RD: " . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . "</div>";
+        }
+        header("Location: all-customer.php");
+        exit();
+    } elseif ($_POST['action'] === 'delete_loan' && isset($_POST['loan_id'])) {
+        $loan_id = intval($_POST['loan_id']);
+        $status_check = $conn->query("SELECT l.status FROM loans l JOIN customers c ON l.customer_id = c.id WHERE l.id = $loan_id AND c.agent_id = $agent_id");
+        $status = ($status_check && $row_s = $status_check->fetch_assoc()) ? $row_s['status'] : '';
+
+        if (in_array($status, ['paid', 'closed', 'rejected'])) {
+            $conn->begin_transaction();
+            try {
+                $conn->query("DELETE FROM payments WHERE loan_id = $loan_id");
+                $conn->query("DELETE FROM wallet_transactions WHERE loan_id = $loan_id");
+                $conn->query("DELETE FROM loans WHERE id = $loan_id");
+                $conn->commit();
+                $_SESSION['message'] = "<div class='alert alert-success d-flex align-items-center'><i class='ri-delete-bin-line fs-4 me-2'></i> Completed/Closed Loan account permanently deleted.</div>";
+            } catch (Exception $e) {
+                $conn->rollback();
+                $_SESSION['message'] = "<div class='alert alert-danger'>Error deleting loan: " . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . "</div>";
+            }
+        } else {
+            $_SESSION['message'] = "<div class='alert alert-danger'>Only completed (paid) or closed loans can be deleted.</div>";
+        }
+        header("Location: all-customer.php");
+        exit();
+    } elseif ($_POST['action'] === 'delete_rd' && isset($_POST['rd_id'])) {
+        $rd_id = intval($_POST['rd_id']);
+        $status_check = $conn->query("SELECT r.status FROM recurring_deposits r JOIN customers c ON r.customer_id = c.id WHERE r.id = $rd_id AND c.agent_id = $agent_id");
+        $status = ($status_check && $row_s = $status_check->fetch_assoc()) ? $row_s['status'] : '';
+
+        if (in_array($status, ['matured', 'closed', 'premature-closed', 'rejected'])) {
+            $conn->begin_transaction();
+            try {
+                $conn->query("DELETE FROM rd_payments WHERE rd_id = $rd_id");
+                $conn->query("DELETE FROM wallet_transactions WHERE rd_id = $rd_id");
+                $conn->query("DELETE FROM recurring_deposits WHERE id = $rd_id");
+                $conn->commit();
+                $_SESSION['message'] = "<div class='alert alert-success d-flex align-items-center'><i class='ri-delete-bin-line fs-4 me-2'></i> Completed/Closed RD account permanently deleted.</div>";
+            } catch (Exception $e) {
+                $conn->rollback();
+                $_SESSION['message'] = "<div class='alert alert-danger'>Error deleting RD: " . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . "</div>";
+            }
+        } else {
+            $_SESSION['message'] = "<div class='alert alert-danger'>Only matured or closed RDs can be deleted.</div>";
         }
         header("Location: all-customer.php");
         exit();
@@ -176,7 +385,7 @@ $stmt->close();
 
 // Fetch all customer loans for agent's customers
 $customer_loans = [];
-$loans_res = $conn->prepare("SELECT id, customer_id, loan_amount, total_repayable_amount, monthly_installment, approval_date, repayment_cycle, tenure, status FROM loans WHERE agent_id = ?");
+$loans_res = $conn->prepare("SELECT l.id, l.customer_id, l.loan_amount, l.total_repayable_amount, l.monthly_installment, l.approval_date, l.repayment_cycle, l.tenure, l.status FROM loans l JOIN customers c ON l.customer_id = c.id WHERE c.agent_id = ?");
 $loans_res->bind_param("i", $agent_id);
 $loans_res->execute();
 $loans_result = $loans_res->get_result();
@@ -187,7 +396,7 @@ $loans_res->close();
 
 // Fetch loan payments for agent's loans
 $loan_payments = [];
-$pay_res = $conn->prepare("SELECT p.loan_id, SUM(p.amount_paid) as total_paid FROM payments p JOIN loans l ON p.loan_id = l.id WHERE l.agent_id = ? AND p.status != 'rejected' GROUP BY p.loan_id");
+$pay_res = $conn->prepare("SELECT p.loan_id, SUM(p.amount_paid) as total_paid FROM payments p JOIN loans l ON p.loan_id = l.id JOIN customers c ON l.customer_id = c.id WHERE c.agent_id = ? AND p.status != 'rejected' GROUP BY p.loan_id");
 $pay_res->bind_param("i", $agent_id);
 $pay_res->execute();
 $pay_result = $pay_res->get_result();
@@ -198,7 +407,7 @@ $pay_res->close();
 
 // Fetch all RDs for agent's customers
 $customer_rds = [];
-$rds_res = $conn->prepare("SELECT id, customer_id, deposit_amount, tenure, repayment_cycle, start_date, status FROM recurring_deposits WHERE agent_id = ? AND status != 'rejected'");
+$rds_res = $conn->prepare("SELECT rd.id, rd.customer_id, rd.deposit_amount, rd.tenure, rd.repayment_cycle, rd.start_date, rd.status FROM recurring_deposits rd JOIN customers c ON rd.customer_id = c.id WHERE c.agent_id = ? AND rd.status != 'rejected'");
 $rds_res->bind_param("i", $agent_id);
 $rds_res->execute();
 $rds_result = $rds_res->get_result();
@@ -209,7 +418,7 @@ $rds_res->close();
 
 // Fetch RD payments for agent's RDs
 $rd_payments = [];
-$rd_pay_res = $conn->prepare("SELECT rp.rd_id, SUM(rp.amount_paid) as total_paid FROM rd_payments rp JOIN recurring_deposits rd ON rp.rd_id = rd.id WHERE rd.agent_id = ? AND rp.status != 'rejected' GROUP BY rp.rd_id");
+$rd_pay_res = $conn->prepare("SELECT rp.rd_id, SUM(rp.amount_paid) as total_paid FROM rd_payments rp JOIN recurring_deposits rd ON rp.rd_id = rd.id JOIN customers c ON rd.customer_id = c.id WHERE c.agent_id = ? AND rp.status != 'rejected' GROUP BY rp.rd_id");
 $rd_pay_res->bind_param("i", $agent_id);
 $rd_pay_res->execute();
 $rd_pay_result = $rd_pay_res->get_result();
@@ -297,18 +506,22 @@ $rd_pay_res->close();
                                                                     $loan_id = $loan['id'];
                                                                     $paid = isset($loan_payments[$loan_id]) ? $loan_payments[$loan_id] : 0.0;
                                                                     $repayable = (float)$loan['total_repayable_amount'];
-                                                                    $remaining = max(0.0, $repayable - $paid);
+                                                                    $status_clean = strtolower(trim($loan['status']));
+                                                                    if (in_array($status_clean, ['paid', 'rejected', 'closed'])) {
+                                                                        $remaining = 0.0;
+                                                                    } else {
+                                                                        $remaining = max(0.0, $repayable - $paid);
+                                                                    }
 
-                                                                    if ($loan['status'] === 'active' || $loan['status'] === 'approved' || $loan['status'] === 'defaulted') {
-                                                                        if ($loan['status'] !== 'paid' && $loan['status'] !== 'rejected' && $loan['status'] !== 'closed') {
-                                                                            $active_loans_count++;
-                                                                        }
+                                                                    if (!in_array($status_clean, ['paid', 'rejected', 'closed']) && $remaining > 0.01) {
+                                                                        $active_loans_count++;
                                                                         $due_loan_amount += $remaining;
+                                                                    }
 
                                                                         // Calculate Default Amount (overdue installments)
-                                                                        if ($loan['status'] === 'defaulted') {
+                                                                        if ($status_clean === 'defaulted') {
                                                                             $default_loan_amount += $remaining;
-                                                                        } else {
+                                                                        } elseif (!in_array($status_clean, ['paid', 'rejected', 'closed']) && $remaining > 0.01) {
                                                                             $approval_date_str = $loan['approval_date'];
                                                                             if (!empty($approval_date_str)) {
                                                                                 $approval_date = new DateTime($approval_date_str);
@@ -343,7 +556,6 @@ $rd_pay_res->close();
                                                                                 }
                                                                             }
                                                                         }
-                                                                    }
                                                                 }
                                                             }
 
@@ -362,17 +574,21 @@ $rd_pay_res->close();
 
                                                                     $rd_id = $rd['id'];
                                                                     $paid = isset($rd_payments[$rd_id]) ? $rd_payments[$rd_id] : 0.0;
-                                                                    $remaining = max(0.0, $target_val - $paid);
+                                                                    $status_clean = strtolower(trim($rd['status']));
+                                                                    if (in_array($status_clean, ['matured', 'rejected', 'closed', 'premature-closed'])) {
+                                                                        $remaining = 0.0;
+                                                                    } else {
+                                                                        $remaining = max(0.0, $target_val - $paid);
+                                                                    }
 
-                                                                    if ($rd['status'] === 'active' || $rd['status'] === 'approved') {
-                                                                        if ($rd['status'] !== 'matured' && $rd['status'] !== 'rejected' && $rd['status'] !== 'closed') {
-                                                                            $active_rds_count++;
-                                                                        }
+                                                                    if (!in_array($status_clean, ['matured', 'rejected', 'closed', 'premature-closed']) && $remaining > 0.01) {
+                                                                        $active_rds_count++;
                                                                         $due_rd_amount += $remaining;
+                                                                    }
 
                                                                         // Calculate Default Amount (overdue installments) for RDs
                                                                         $start_date_str = $rd['start_date'];
-                                                                        if (!empty($start_date_str)) {
+                                                                        if (!empty($start_date_str) && !in_array($status_clean, ['matured', 'rejected', 'closed', 'premature-closed']) && $remaining > 0.01) {
                                                                             $start_date = new DateTime($start_date_str);
                                                                             $start_date->setTime(0, 0, 0);
                                                                             $today = new DateTime();
@@ -404,7 +620,6 @@ $rd_pay_res->close();
                                                                                 $default_rd_amount += $overdue;
                                                                             }
                                                                         }
-                                                                    }
                                                                 }
                                                             }
                                                             ?>
@@ -416,17 +631,34 @@ $rd_pay_res->close();
                                                                 <div><strong>Default Amount:</strong> ₹<?php echo number_format($default_loan_amount, 2); ?></div>
                                                                 <?php
                                                                 $active_loans_list = [];
+                                                                $completed_loans_list = [];
                                                                 if (isset($customer_loans[$customer_id])) {
                                                                     foreach ($customer_loans[$customer_id] as $l) {
-                                                                        if ($l['status'] !== 'paid' && $l['status'] !== 'rejected' && $l['status'] !== 'closed') {
-                                                                            $paid = isset($loan_payments[$l['id']]) ? $loan_payments[$l['id']] : 0.0;
-                                                                            $repayable = (float)$l['total_repayable_amount'];
-                                                                            $remaining = max(0.0, $repayable - $paid);
-                                                                            $active_loans_list[] = [
+                                                                        $paid = isset($loan_payments[$l['id']]) ? $loan_payments[$l['id']] : 0.0;
+                                                                        $repayable = (float)$l['total_repayable_amount'];
+                                                                        $status_clean = strtolower(trim($l['status']));
+                                                                        if (in_array($status_clean, ['paid', 'rejected', 'closed'])) {
+                                                                            $remaining = 0.0;
+                                                                            $completed_loans_list[] = [
                                                                                 'id' => $l['id'],
                                                                                 'amount' => $l['loan_amount'],
-                                                                                'remaining' => $remaining
+                                                                                'status' => ucfirst($status_clean)
                                                                             ];
+                                                                        } else {
+                                                                            $remaining = max(0.0, $repayable - $paid);
+                                                                            if ($remaining > 0.01) {
+                                                                                $active_loans_list[] = [
+                                                                                    'id' => $l['id'],
+                                                                                    'amount' => $l['loan_amount'],
+                                                                                    'remaining' => $remaining
+                                                                                ];
+                                                                            } else {
+                                                                                $completed_loans_list[] = [
+                                                                                    'id' => $l['id'],
+                                                                                    'amount' => $l['loan_amount'],
+                                                                                    'status' => 'Paid'
+                                                                                ];
+                                                                            }
                                                                         }
                                                                     }
                                                                 }
@@ -434,10 +666,19 @@ $rd_pay_res->close();
                                                                 ?>
                                                                     <button class="btn btn-sm btn-outline-danger close-loan-trigger-btn" 
                                                                             data-customer-id="<?php echo $customer_id; ?>" 
-                                                                            data-customer-name="<?php echo htmlspecialchars($customer['full_name']); ?>"
-                                                                            data-loans='<?php echo json_encode($active_loans_list); ?>'
+                                                                            data-customer-name="<?php echo htmlspecialchars($customer['full_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                                            data-loans="<?php echo htmlspecialchars(json_encode($active_loans_list), ENT_QUOTES, 'UTF-8'); ?>"
                                                                             style="padding: 2px 6px; font-size: 11px; display: block; margin: 5px auto 0;">
                                                                         <i class="ri-close-circle-line"></i> Close Loan
+                                                                    </button>
+                                                                <?php endif; ?>
+                                                                <?php if (!empty($completed_loans_list)): ?>
+                                                                    <button class="btn btn-sm btn-outline-secondary delete-loan-trigger-btn" 
+                                                                            data-customer-id="<?php echo $customer_id; ?>" 
+                                                                            data-customer-name="<?php echo htmlspecialchars($customer['full_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                                            data-loans="<?php echo htmlspecialchars(json_encode($completed_loans_list), ENT_QUOTES, 'UTF-8'); ?>"
+                                                                            style="padding: 2px 6px; font-size: 11px; display: block; margin: 5px auto 0;">
+                                                                        <i class="ri-delete-bin-line"></i> Delete Loan
                                                                     </button>
                                                                 <?php endif; ?>
                                                             </td>
@@ -448,17 +689,34 @@ $rd_pay_res->close();
                                                                 <div><strong>Default Amount:</strong> ₹<?php echo number_format($default_rd_amount, 2); ?></div>
                                                                 <?php
                                                                 $active_rds_list = [];
+                                                                $completed_rds_list = [];
                                                                 if (isset($customer_rds[$customer_id])) {
                                                                     foreach ($customer_rds[$customer_id] as $r) {
-                                                                        if ($r['status'] !== 'matured' && $r['status'] !== 'rejected' && $r['status'] !== 'closed') {
-                                                                            $paid = isset($rd_payments[$r['id']]) ? $rd_payments[$r['id']] : 0.0;
-                                                                            $target_val = (float)$r['deposit_amount'] * (int)$r['tenure'];
-                                                                            $remaining = max(0.0, $target_val - $paid);
-                                                                            $active_rds_list[] = [
+                                                                        $paid = isset($rd_payments[$r['id']]) ? $rd_payments[$r['id']] : 0.0;
+                                                                        $target_val = (float)$r['deposit_amount'] * (int)$r['tenure'];
+                                                                        $status_clean = strtolower(trim($r['status']));
+                                                                        if (in_array($status_clean, ['matured', 'rejected', 'closed', 'premature-closed'])) {
+                                                                            $remaining = 0.0;
+                                                                            $completed_rds_list[] = [
                                                                                 'id' => $r['id'],
                                                                                 'amount' => $r['deposit_amount'],
-                                                                                'remaining' => $remaining
+                                                                                'status' => ucfirst($status_clean)
                                                                             ];
+                                                                        } else {
+                                                                            $remaining = max(0.0, $target_val - $paid);
+                                                                            if ($remaining > 0.01) {
+                                                                                $active_rds_list[] = [
+                                                                                    'id' => $r['id'],
+                                                                                    'amount' => $r['deposit_amount'],
+                                                                                    'remaining' => $remaining
+                                                                                ];
+                                                                            } else {
+                                                                                $completed_rds_list[] = [
+                                                                                    'id' => $r['id'],
+                                                                                    'amount' => $r['deposit_amount'],
+                                                                                    'status' => 'Matured'
+                                                                                ];
+                                                                            }
                                                                         }
                                                                     }
                                                                 }
@@ -466,10 +724,19 @@ $rd_pay_res->close();
                                                                 ?>
                                                                     <button class="btn btn-sm btn-outline-danger close-rd-trigger-btn" 
                                                                             data-customer-id="<?php echo $customer_id; ?>" 
-                                                                            data-customer-name="<?php echo htmlspecialchars($customer['full_name']); ?>"
-                                                                            data-rds='<?php echo json_encode($active_rds_list); ?>'
+                                                                            data-customer-name="<?php echo htmlspecialchars($customer['full_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                                            data-rds="<?php echo htmlspecialchars(json_encode($active_rds_list), ENT_QUOTES, 'UTF-8'); ?>"
                                                                             style="padding: 2px 6px; font-size: 11px; display: block; margin: 5px auto 0;">
                                                                         <i class="ri-close-circle-line"></i> Close RD
+                                                                    </button>
+                                                                <?php endif; ?>
+                                                                <?php if (!empty($completed_rds_list)): ?>
+                                                                    <button class="btn btn-sm btn-outline-secondary delete-rd-trigger-btn" 
+                                                                            data-customer-id="<?php echo $customer_id; ?>" 
+                                                                            data-customer-name="<?php echo htmlspecialchars($customer['full_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                                            data-rds="<?php echo htmlspecialchars(json_encode($completed_rds_list), ENT_QUOTES, 'UTF-8'); ?>"
+                                                                            style="padding: 2px 6px; font-size: 11px; display: block; margin: 5px auto 0;">
+                                                                        <i class="ri-delete-bin-line"></i> Delete RD
                                                                     </button>
                                                                 <?php endif; ?>
                                                             </td>

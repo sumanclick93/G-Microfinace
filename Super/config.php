@@ -1,9 +1,4 @@
 <?php
-// --- START: Add these lines for debugging ---
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-// --- END: Debugging lines ---
 // Database Configuration
 if (!defined('DB_HOST')) {
     define('DB_HOST', 'localhost');

@@ -19,9 +19,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && isset($_P
     $action = $_POST['action'];
 
     if ($action === 'approve') {
+        // First get the rd_id for this payment
+        $get_rd = $conn->query("SELECT rd_id FROM rd_payments WHERE id = " . intval($payment_id));
+        $rd_id = ($get_rd && $row_r = $get_rd->fetch_assoc()) ? intval($row_r['rd_id']) : 0;
+
         $stmt = $conn->prepare("UPDATE rd_payments SET status = 'approved' WHERE id = ?");
         $stmt->bind_param("i", $payment_id);
         if ($stmt->execute()) {
+            if ($rd_id > 0) {
+                $check_rd = $conn->query("SELECT rd.tenure, COUNT(p.id) as cnt FROM recurring_deposits rd LEFT JOIN rd_payments p ON rd.id = p.rd_id WHERE rd.id = $rd_id AND p.status = 'approved'");
+                if ($check_rd && $row_rd = $check_rd->fetch_assoc()) {
+                    if (intval($row_rd['cnt']) >= intval($row_rd['tenure']) && intval($row_rd['tenure']) > 0) {
+                        $conn->query("UPDATE recurring_deposits SET status = 'matured' WHERE id = $rd_id AND status NOT IN ('closed', 'matured')");
+                    }
+                }
+            }
             $_SESSION['message'] = "<div class='alert alert-success d-flex align-items-center'><i class='ri-check-line fs-4 me-2'></i> RD deposit approved and added to customer ledger.</div>";
         }
         $stmt->close();

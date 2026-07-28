@@ -58,7 +58,7 @@ $conn->close();
     <title>Admin Login - G-Microfinance</title>
     <link rel="stylesheet" href="assets/css/style.css"> <style>
         /* Simple styling for the login page */
-        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background-color: #f8f9fa; }
+        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background-color: #f8f9fa; padding-top: 38px; }
         .login-card { max-width: 400px; width: 100%; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); background-color: white; }
         .login-card h2 { text-align: center; margin-bottom: 1.5rem; }
         .form-group { margin-bottom: 1rem; }
@@ -66,9 +66,17 @@ $conn->close();
         .btn-primary { width: 100%; padding: 0.75rem; background-color: #0d6efd; color: white; border: none; border-radius: 4px; cursor: pointer; }
         .btn-primary:hover { background-color: #0b5ed7; }
         .alert-danger { padding: 1rem; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 4px; margin-bottom: 1rem; }
+        .samaj-foundation-bar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 10050; height: 38px;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(90deg, #0f5132 0%, #198754 55%, #0f5132 100%);
+            color: #fff; font-family: system-ui, sans-serif; font-size: 0.95rem; font-weight: 600;
+            letter-spacing: 0.06em; box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+        }
     </style>
 </head>
 <body>
+    <div class="samaj-foundation-bar" role="banner">Samajbandhan Foundation</div>
     <div class="login-card">
         <h2>Admin Panel Login</h2>
 

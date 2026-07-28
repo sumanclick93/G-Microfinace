@@ -224,18 +224,23 @@ $stmt->close();
                                                             <td><?php echo htmlspecialchars($loan['customer_name']); ?></td>
                                                             <td><?php echo htmlspecialchars($loan['agent_first_name'] . ' ' . $loan['agent_last_name']); ?></td>
                                                              <td>₹<?php echo number_format($loan['loan_amount']); ?></td>
-                                                             <td><strong><?php echo $loan['paid_emis'] . ' / ' . $loan['tenure']; ?></strong></td>
+                                                             <td><strong><?php
+                                                                $status_clean = strtolower(trim($loan['status']));
+                                                                $display_emis = in_array($status_clean, ['closed', 'paid']) ? $loan['tenure'] : $loan['paid_emis'];
+                                                                echo $display_emis . ' / ' . $loan['tenure'];
+                                                             ?></strong></td>
                                                              <td><?php echo date('d M, Y', strtotime($loan['application_date'])); ?></td>
                                                             <td>
                                                                 <?php
                                                                     $status_color = 'secondary';
-                                                                    switch ($loan['status']) {
+                                                                    switch ($status_clean) {
                                                                         case 'approved': case 'active': case 'paid': $status_color = 'success'; break;
                                                                         case 'pending': $status_color = 'warning'; break;
                                                                         case 'rejected': case 'defaulted': $status_color = 'danger'; break;
+                                                                        case 'closed': $status_color = 'dark'; break;
                                                                     }
                                                                 ?>
-                                                                <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucfirst($loan['status']); ?></span>
+                                                                <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucfirst($status_clean); ?></span>
                                                             </td>
                                                              <td>
                                                                  <ul>

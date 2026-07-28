@@ -31,6 +31,35 @@ if (isset($_SESSION['agent_id'])) {
 }
 ?>
 
+<style>
+.samaj-foundation-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10050;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(90deg, #0f5132 0%, #198754 55%, #0f5132 100%);
+    color: #fff;
+    font-family: "Public Sans", system-ui, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.page-header { top: 38px !important; }
+.sidebar-wrapper { top: 38px !important; height: calc(100vh - 38px) !important; }
+.page-body { margin-top: calc(90px + 38px) !important; }
+@media (max-width: 991px) {
+    .page-body { margin-top: calc(85px + 38px) !important; }
+}
+</style>
+<div class="samaj-foundation-bar" role="banner">Samajbandhan Foundation</div>
+
 <div class="page-header">
     <div class="header-wrapper m-0">
         <div class="header-logo-wrapper p-0">

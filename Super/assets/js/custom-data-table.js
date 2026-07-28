@@ -1,12 +1,42 @@
 $(document).ready(function () {
-    // 1. Inject CSS to center all table headers, cells, and inner elements (images, text blocks, options)
+    // 1. Inject CSS to center all table headers, cells, and inner elements + Mobile Responsive Card View Mode
     $('<style>')
         .prop('type', 'text/css')
         .html(
             'table.dataTable th, table.dataTable td { text-align: center !important; vertical-align: middle !important; } ' +
             'table.dataTable td .user-name { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-align: center !important; } ' +
             'table.dataTable td .table-image { margin: 0 auto !important; display: flex !important; justify-content: center !important; align-items: center !important; } ' +
-            'table.dataTable td ul { display: flex !important; justify-content: center !important; align-items: center !important; gap: 10px; padding: 0 !important; margin: 0 !important; list-style: none !important; }'
+            'table.dataTable td ul { display: flex !important; justify-content: center !important; align-items: center !important; gap: 10px; padding: 0 !important; margin: 0 !important; list-style: none !important; } ' +
+            /* Mobile Responsive Card View Mode (<= 768px) */
+            '.mobile-view-toggle-container { display: none !important; } ' +
+            '@media (max-width: 768px) { ' +
+                '.dataTables_wrapper { padding: 0 4px !important; } ' +
+                '.dataTables_wrapper .dataTables_filter { text-align: left !important; margin-bottom: 12px !important; } ' +
+                '.dataTables_wrapper .dataTables_filter input { width: 100% !important; margin-left: 0 !important; margin-top: 6px !important; padding: 8px 12px !important; border-radius: 6px !important; border: 1px solid #ced4da !important; box-sizing: border-box !important; } ' +
+                '.dataTables_wrapper .dataTables_length { margin-bottom: 10px !important; float: none !important; text-align: left !important; } ' +
+                '.mobile-view-toggle-container { display: flex !important; justify-content: flex-end; margin-bottom: 12px; } ' +
+                '.mobile-view-toggle-btn { background: #0d6efd; color: #fff !important; border: none; padding: 7px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; box-shadow: 0 2px 4px rgba(13, 110, 253, 0.25); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; transition: all 0.2s ease; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table thead { display: none !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table { display: block !important; width: 100% !important; border: none !important; margin-top: 0 !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody { display: block !important; width: 100% !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr { display: block !important; width: 100% !important; margin-bottom: 16px !important; background: #ffffff !important; border: 1px solid #e2e8f0 !important; border-radius: 12px !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06) !important; padding: 14px !important; position: relative !important; box-sizing: border-box !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td { display: flex !important; justify-content: space-between !important; align-items: flex-start !important; text-align: right !important; padding: 12px 4px !important; border-bottom: 1px dashed #e9ecef !important; min-height: 42px !important; font-size: 13.5px !important; word-break: break-word !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td:last-child { border-bottom: none !important; padding-bottom: 4px !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td::before { content: attr(data-label); font-weight: 700 !important; color: #475569 !important; text-align: left !important; margin-right: 12px !important; flex-shrink: 0 !important; max-width: 42% !important; font-size: 12px !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; padding-top: 2px !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content { display: flex !important; flex-direction: column !important; align-items: flex-end !important; justify-content: center !important; text-align: right !important; max-width: 58% !important; width: 58% !important; gap: 4px !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content > * { max-width: 100% !important; word-break: break-word !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td.sno-cell { background: #f8fafc !important; border-radius: 6px !important; padding: 8px 10px !important; font-weight: 700 !important; color: #0d6efd !important; border-bottom: 1px solid #e2e8f0 !important; margin-bottom: 8px !important; align-items: center !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td.sno-cell .cell-content { flex-direction: row !important; justify-content: flex-end !important; width: auto !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content .user-name { align-items: flex-end !important; text-align: right !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content .table-image { margin: 0 !important; justify-content: flex-end !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content ul, .dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content .d-flex { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; justify-content: flex-end !important; align-items: center !important; gap: 6px !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content .btn, .dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content button { margin: 2px 0 !important; white-space: normal !important; text-align: right !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content .input-group { max-width: 220px !important; width: auto !important; display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content .input-group .form-select { max-width: 85px !important; font-size: 11.5px !important; padding: 4px 6px !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td .cell-content .input-group .amt-input { min-width: 65px !important; max-width: 85px !important; padding: 4px 6px !important; font-size: 12px !important; } ' +
+                '.dataTables_wrapper.mobile-card-mode table.table tbody tr td[style*="display:none"], .dataTables_wrapper.mobile-card-mode table.table tbody tr td[style*="display: none"], .dataTables_wrapper.mobile-card-mode table.table tbody tr td.d-none { display: none !important; } ' +
+                '.dataTables_wrapper:not(.mobile-card-mode) { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; } ' +
+            '}'
         )
         .appendTo('head');
 
@@ -28,12 +58,85 @@ $(document).ready(function () {
         }
     });
 
+    // Helper: Initialize Mobile Responsive Card View on any Table
+    function initMobileCardView($table) {
+        if ($table.data('mobile-view-init')) return;
+        $table.data('mobile-view-init', true);
+
+        var $wrapper = $table.closest('.dataTables_wrapper');
+        if ($wrapper.length === 0) return;
+
+        // Default to Card Mode on mobile screens
+        if (window.innerWidth <= 768) {
+            $wrapper.addClass('mobile-card-mode');
+        }
+
+        // Add Toggle Switch Button to the Wrapper (Visible on Mobile only via CSS)
+        if ($wrapper.find('.mobile-view-toggle-container').length === 0) {
+            var $toggleBtn = $('<button type="button" class="mobile-view-toggle-btn"><i class="ri-layout-grid-line"></i> <span>Card View (Active)</span></button>');
+            var $toggleContainer = $('<div class="mobile-view-toggle-container"></div>').append($toggleBtn);
+            
+            $wrapper.prepend($toggleContainer);
+
+            $toggleBtn.on('click', function () {
+                $wrapper.toggleClass('mobile-card-mode');
+                var isCard = $wrapper.hasClass('mobile-card-mode');
+                if (isCard) {
+                    $(this).html('<i class="ri-layout-grid-line"></i> <span>Card View (Active)</span>');
+                    $(this).css('background', '#0d6efd');
+                } else {
+                    $(this).html('<i class="ri-table-line"></i> <span>Switch to Card View</span>');
+                    $(this).css('background', '#475569');
+                }
+            });
+        }
+
+        // Function to extract header names and set data-label on every table cell
+        function updateCellLabels() {
+            var headers = [];
+            $table.find('thead tr:first th').each(function () {
+                var text = $(this).text().trim();
+                if (!text || text === '') {
+                    text = $(this).attr('data-label-fallback') || 'Detail';
+                }
+                headers.push(text);
+            });
+
+            $table.find('tbody tr').each(function () {
+                $(this).find('td').each(function (index) {
+                    if ($(this).css('display') === 'none' || $(this).hasClass('d-none')) {
+                        return;
+                    }
+                    var headerText = headers[index] || 'Detail';
+                    if (!$(this).attr('data-label')) {
+                        $(this).attr('data-label', headerText);
+                    }
+
+                    // Ensure inner content is wrapped in .cell-content so multiple divs/lines stack vertically
+                    if ($(this).find('> .cell-content').length === 0) {
+                        $(this).wrapInner('<div class="cell-content"></div>');
+                    }
+                });
+            });
+        }
+
+        if ($.fn.DataTable.isDataTable($table[0])) {
+            var dt = $table.DataTable();
+            dt.on('draw.dt init.dt', function () {
+                updateCellLabels();
+            }).draw();
+        } else {
+            updateCellLabels();
+        }
+    }
+
     // We will initialize DataTables on every table with the 'table' class
     $('table.table').each(function () {
         var $table = $(this);
 
         // Skip if already initialized
         if ($.fn.DataTable.isDataTable(this)) {
+            initMobileCardView($table);
             return;
         }
 
@@ -117,7 +220,18 @@ $(document).ready(function () {
                 });
             }).draw();
         }
+
+        initMobileCardView($table);
     });
+
+    // Run initMobileCardView on all tables after page-specific scripts finish (e.g., #collection_table)
+    setTimeout(function () {
+        $('table.dataTable, table.table').each(function () {
+            var tableId = $(this).attr('id') || '';
+            if (tableId.indexOf('inner_table_') === 0) return;
+            initMobileCardView($(this));
+        });
+    }, 400);
 
     // 6. Customer Delete Button Handler
     $(document).on('click', '.customer-delete-btn', function (e) {
@@ -212,20 +326,29 @@ $(document).ready(function () {
         var customerId = $(this).data('customer-id');
         var customerName = $(this).data('customer-name');
         var loans = $(this).data('loans') || [];
-        var role = window.location.pathname.includes('Super') ? 'admin' : 'agent';
-        var actionUrl = role === 'admin' ? 'all-customers-loans.php' : 'all-customer.php';
+        var isSuper = window.location.pathname.toLowerCase().indexOf('super') !== -1 || window.location.pathname.indexOf('all-customers-loans.php') !== -1;
+        var actionUrl = isSuper ? 'all-customers-loans.php' : 'all-customer.php';
 
-        if (loans.length === 0) {
+        if (typeof loans === 'string') {
+            try { loans = JSON.parse(loans); } catch (err) { loans = []; }
+        }
+        if (!Array.isArray(loans) || loans.length === 0) {
             alert('No active loans found for this customer.');
             return;
         }
 
         var selectOptions = '';
         loans.forEach(function (loan, index) {
-            selectOptions += '<option value="' + loan.id + '" data-remaining="' + loan.remaining + '">Loan #' + loan.id + ' (Principal: ₹' + parseFloat(loan.amount).toLocaleString('en-IN') + ')</option>';
+            var rem = (loan && loan.remaining !== undefined && loan.remaining !== null) ? parseFloat(loan.remaining) : 0;
+            if (isNaN(rem)) rem = 0;
+            var amt = (loan && loan.amount !== undefined && loan.amount !== null) ? parseFloat(loan.amount) : 0;
+            if (isNaN(amt)) amt = 0;
+            selectOptions += '<option value="' + loan.id + '" data-remaining="' + rem.toFixed(2) + '">Loan #' + loan.id + ' (Principal: ₹' + amt.toLocaleString('en-IN') + ')</option>';
         });
 
-        var firstRemaining = parseFloat(loans[0].remaining).toFixed(2);
+        var firstRem = (loans[0] && loans[0].remaining !== undefined && loans[0].remaining !== null) ? parseFloat(loans[0].remaining) : 0;
+        if (isNaN(firstRem)) firstRem = 0;
+        var firstRemaining = firstRem.toFixed(2);
 
         var modalHtml = 
             '<div class="modal fade theme-modal" id="closeLoanModal" tabindex="-1" aria-hidden="true">' +
@@ -277,7 +400,9 @@ $(document).ready(function () {
         // Update displayed remaining balance on select change
         $(document).off('change', '#close_loan_id_select').on('change', '#close_loan_id_select', function () {
             var selected = $(this).find('option:selected');
-            var remaining = parseFloat(selected.data('remaining')).toFixed(2);
+            var rem = parseFloat(selected.data('remaining'));
+            if (isNaN(rem)) rem = 0;
+            var remaining = rem.toFixed(2);
             $('#close_loan_remaining_display').val(remaining);
             $('#close_loan_amount_paid').val(remaining);
         });
@@ -292,20 +417,29 @@ $(document).ready(function () {
         var customerId = $(this).data('customer-id');
         var customerName = $(this).data('customer-name');
         var rds = $(this).data('rds') || [];
-        var role = window.location.pathname.includes('Super') ? 'admin' : 'agent';
-        var actionUrl = role === 'admin' ? 'all-customers-loans.php' : 'all-customer.php';
+        var isSuper = window.location.pathname.toLowerCase().indexOf('super') !== -1 || window.location.pathname.indexOf('all-customers-loans.php') !== -1;
+        var actionUrl = isSuper ? 'all-customers-loans.php' : 'all-customer.php';
 
-        if (rds.length === 0) {
+        if (typeof rds === 'string') {
+            try { rds = JSON.parse(rds); } catch (err) { rds = []; }
+        }
+        if (!Array.isArray(rds) || rds.length === 0) {
             alert('No active RD accounts found for this customer.');
             return;
         }
 
         var selectOptions = '';
         rds.forEach(function (rd, index) {
-            selectOptions += '<option value="' + rd.id + '" data-remaining="' + rd.remaining + '">RD #' + rd.id + ' (Installment: ₹' + parseFloat(rd.amount).toLocaleString('en-IN') + ')</option>';
+            var rem = (rd && rd.remaining !== undefined && rd.remaining !== null) ? parseFloat(rd.remaining) : 0;
+            if (isNaN(rem)) rem = 0;
+            var amt = (rd && rd.amount !== undefined && rd.amount !== null) ? parseFloat(rd.amount) : 0;
+            if (isNaN(amt)) amt = 0;
+            selectOptions += '<option value="' + rd.id + '" data-remaining="' + rem.toFixed(2) + '">RD #' + rd.id + ' (Installment: ₹' + amt.toLocaleString('en-IN') + ')</option>';
         });
 
-        var firstRemaining = parseFloat(rds[0].remaining).toFixed(2);
+        var firstRem = (rds[0] && rds[0].remaining !== undefined && rds[0].remaining !== null) ? parseFloat(rds[0].remaining) : 0;
+        if (isNaN(firstRem)) firstRem = 0;
+        var firstRemaining = firstRem.toFixed(2);
 
         var modalHtml = 
             '<div class="modal fade theme-modal" id="closeRdModal" tabindex="-1" aria-hidden="true">' +
@@ -357,12 +491,134 @@ $(document).ready(function () {
         // Update displayed remaining balance on select change
         $(document).off('change', '#close_rd_id_select').on('change', '#close_rd_id_select', function () {
             var selected = $(this).find('option:selected');
-            var remaining = parseFloat(selected.data('remaining')).toFixed(2);
+            var rem = parseFloat(selected.data('remaining'));
+            if (isNaN(rem)) rem = 0;
+            var remaining = rem.toFixed(2);
             $('#close_rd_remaining_display').val(remaining);
             $('#close_rd_amount_paid').val(remaining);
         });
 
         var myModal = new bootstrap.Modal(document.getElementById('closeRdModal'));
+        myModal.show();
+    });
+
+    // 9. Delete Completed/Closed Loan Button Handler
+    $(document).on('click', '.delete-loan-trigger-btn', function (e) {
+        e.preventDefault();
+        var customerId = $(this).data('customer-id');
+        var customerName = $(this).data('customer-name');
+        var loans = $(this).data('loans') || [];
+        var isSuper = window.location.pathname.toLowerCase().indexOf('super') !== -1 || window.location.pathname.indexOf('all-customers-loans.php') !== -1;
+        var actionUrl = isSuper ? 'all-customers-loans.php' : 'all-customer.php';
+
+        if (typeof loans === 'string') {
+            try { loans = JSON.parse(loans); } catch (err) { loans = []; }
+        }
+        if (!Array.isArray(loans) || loans.length === 0) {
+            alert('No completed/closed loans found for this customer.');
+            return;
+        }
+
+        var selectOptions = '';
+        loans.forEach(function (loan) {
+            var amt = (loan && loan.amount !== undefined && loan.amount !== null) ? parseFloat(loan.amount) : 0;
+            if (isNaN(amt)) amt = 0;
+            selectOptions += '<option value="' + loan.id + '">Loan #' + loan.id + ' (' + loan.status + ' - Principal: ₹' + amt.toLocaleString('en-IN') + ')</option>';
+        });
+
+        var modalHtml = 
+            '<div class="modal fade theme-modal" id="deleteLoanAccountModal" tabindex="-1" aria-hidden="true">' +
+                '<div class="modal-dialog modal-dialog-centered">' +
+                    '<div class="modal-content">' +
+                        '<div class="modal-header d-block text-center">' +
+                            '<h5 class="modal-title w-100"><i class="ri-delete-bin-line" style="color: #dc3545;"></i> Delete Completed/Closed Loan</h5>' +
+                            '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>' +
+                        '</div>' +
+                        '<form method="POST" action="' + actionUrl + '">' +
+                            '<input type="hidden" name="action" value="delete_loan">' +
+                            '<div class="modal-body p-4 text-start">' +
+                                '<p class="text-danger mb-2"><strong>Warning:</strong> Permanent deletion of record.</p>' +
+                                '<p class="text-muted mb-3">You are deleting a completed/closed loan for <strong>' + customerName + '</strong>. All associated payments and wallet history will also be removed.</p>' +
+                                '<div class="mb-3">' +
+                                    '<label class="form-label" style="font-weight: 500;">Select Loan Account to Delete</label>' +
+                                    '<select class="form-select" name="loan_id" required>' +
+                                        selectOptions +
+                                    '</select>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="modal-footer justify-content-center">' +
+                                '<button type="button" class="btn btn-animation btn-md fw-bold btn-secondary" data-bs-dismiss="modal">Cancel</button>' +
+                                '<button type="submit" class="btn btn-animation btn-md fw-bold btn-danger">Confirm Deletion</button>' +
+                            '</div>' +
+                        '</form>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+
+        $('#deleteLoanAccountModal').remove();
+        $('body').append(modalHtml);
+
+        var myModal = new bootstrap.Modal(document.getElementById('deleteLoanAccountModal'));
+        myModal.show();
+    });
+
+    // 10. Delete Completed/Closed RD Button Handler
+    $(document).on('click', '.delete-rd-trigger-btn', function (e) {
+        e.preventDefault();
+        var customerId = $(this).data('customer-id');
+        var customerName = $(this).data('customer-name');
+        var rds = $(this).data('rds') || [];
+        var isSuper = window.location.pathname.toLowerCase().indexOf('super') !== -1 || window.location.pathname.indexOf('all-customers-loans.php') !== -1;
+        var actionUrl = isSuper ? 'all-customers-loans.php' : 'all-customer.php';
+
+        if (typeof rds === 'string') {
+            try { rds = JSON.parse(rds); } catch (err) { rds = []; }
+        }
+        if (!Array.isArray(rds) || rds.length === 0) {
+            alert('No completed/closed RD accounts found for this customer.');
+            return;
+        }
+
+        var selectOptions = '';
+        rds.forEach(function (rd) {
+            var amt = (rd && rd.amount !== undefined && rd.amount !== null) ? parseFloat(rd.amount) : 0;
+            if (isNaN(amt)) amt = 0;
+            selectOptions += '<option value="' + rd.id + '">RD #' + rd.id + ' (' + rd.status + ' - Deposit: ₹' + amt.toLocaleString('en-IN') + ')</option>';
+        });
+
+        var modalHtml = 
+            '<div class="modal fade theme-modal" id="deleteRDAccountModal" tabindex="-1" aria-hidden="true">' +
+                '<div class="modal-dialog modal-dialog-centered">' +
+                    '<div class="modal-content">' +
+                        '<div class="modal-header d-block text-center">' +
+                            '<h5 class="modal-title w-100"><i class="ri-delete-bin-line" style="color: #dc3545;"></i> Delete Completed/Closed RD</h5>' +
+                            '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>' +
+                        '</div>' +
+                        '<form method="POST" action="' + actionUrl + '">' +
+                            '<input type="hidden" name="action" value="delete_rd">' +
+                            '<div class="modal-body p-4 text-start">' +
+                                '<p class="text-danger mb-2"><strong>Warning:</strong> Permanent deletion of record.</p>' +
+                                '<p class="text-muted mb-3">You are deleting a completed/closed RD account for <strong>' + customerName + '</strong>. All associated deposits and wallet history will also be removed.</p>' +
+                                '<div class="mb-3">' +
+                                    '<label class="form-label" style="font-weight: 500;">Select RD Account to Delete</label>' +
+                                    '<select class="form-select" name="rd_id" required>' +
+                                        selectOptions +
+                                    '</select>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="modal-footer justify-content-center">' +
+                                '<button type="button" class="btn btn-animation btn-md fw-bold btn-secondary" data-bs-dismiss="modal">Cancel</button>' +
+                                '<button type="submit" class="btn btn-animation btn-md fw-bold btn-danger">Confirm Deletion</button>' +
+                            '</div>' +
+                        '</form>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+
+        $('#deleteRDAccountModal').remove();
+        $('body').append(modalHtml);
+
+        var myModal = new bootstrap.Modal(document.getElementById('deleteRDAccountModal'));
         myModal.show();
     });
 });

@@ -176,14 +176,15 @@ $stmt->close();
                                                             <td><?php echo date('d M, Y', strtotime($rd['start_date'])); ?></td>
                                                             <td>
                                                                  <?php
+                                                                     $status_clean = strtolower(trim($rd['status']));
                                                                      $status_color = 'primary';
-                                                                     switch ($rd['status']) {
+                                                                     switch ($status_clean) {
                                                                          case 'active': case 'matured': case 'closed': $status_color = 'success'; break;
                                                                          case 'pending': $status_color = 'warning'; break;
                                                                          case 'rejected': case 'premature-closed': $status_color = 'danger'; break;
                                                                      }
                                                                  ?>
-                                                                <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucwords(str_replace('-', ' ', $rd['status'])); ?></span>
+                                                                <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucwords(str_replace('-', ' ', $status_clean)); ?></span>
                                                             </td>
                                                              <td>
                                                                  <ul>

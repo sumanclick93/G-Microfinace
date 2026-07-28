@@ -164,14 +164,16 @@ $stmt->close();
                                                             <td><?php echo date('d M, Y', strtotime($loan['application_date'])); ?></td>
                                                             <td>
                                                                 <?php
+                                                                    $status_clean = strtolower(trim($loan['status']));
                                                                     $status_color = 'secondary';
-                                                                    switch ($loan['status']) {
+                                                                    switch ($status_clean) {
                                                                         case 'approved': case 'active': case 'paid': $status_color = 'success'; break;
                                                                         case 'pending': $status_color = 'warning'; break;
                                                                         case 'rejected': case 'defaulted': $status_color = 'danger'; break;
+                                                                        case 'closed': $status_color = 'dark'; break;
                                                                     }
                                                                 ?>
-                                                                <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucfirst($loan['status']); ?></span>
+                                                                <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucfirst($status_clean); ?></span>
                                                             </td>
                                                             <td>
                                                                 <ul>

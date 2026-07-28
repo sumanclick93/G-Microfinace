@@ -82,6 +82,12 @@
                             <span>Collection Report</span>
                         </a>
                     </li>
+                    <li class="sidebar-list">
+                        <a class="sidebar-link sidebar-title link-nav" href="collection-history.php">
+                            <i data-feather="clock"></i>
+                            <span>Collection History</span>
+                        </a>
+                    </li>
                     <li class="sidebar-list-item">
                         <a class="sidebar-link" href="all-rds.php">
                             <i data-feather="database"></i> <span>All RDs</span>

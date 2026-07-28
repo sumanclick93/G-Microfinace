@@ -35,7 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $status = ($result->num_rows > 0) ? $result->fetch_assoc()['status'] : '';
         $status_check_stmt->close();
 
-        if (in_array($status, ['rejected', 'paid', 'closed'])) {
+        $status_clean_check = strtolower(trim($status));
+        if (in_array($status_clean_check, ['rejected', 'paid', 'closed', 'premature-closed'])) {
             $conn->begin_transaction();
             try {
                 // Delete associated payments
@@ -66,6 +67,49 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             }
         } else {
             $_SESSION['message'] = "<div class='alert alert-danger'>Only rejected or completed loans can be deleted.</div>";
+        }
+        header("Location: admin-loan-details.php?id=" . $loan_id);
+        exit();
+    } elseif ($action == 'close' || $action == 'close_loan') {
+        $notes = $_POST['notes'] ?? 'Closed by admin.';
+        $amount_paid = floatval($_POST['amount_paid'] ?? 0);
+        
+        $conn->begin_transaction();
+        try {
+            if ($amount_paid > 0) {
+                $stmt_pay = $conn->prepare("INSERT INTO payments (loan_id, amount_paid, payment_date, notes, status) VALUES (?, ?, NOW(), ?, 'approved')");
+                $stmt_pay->bind_param("ids", $loan_id, $amount_paid, $notes);
+                $stmt_pay->execute();
+                $stmt_pay->close();
+
+                $stmt_ag = $conn->prepare("SELECT agent_id FROM loans WHERE id = ?");
+                $stmt_ag->bind_param("i", $loan_id);
+                $stmt_ag->execute();
+                $res_ag = $stmt_ag->get_result();
+                $ag_id = ($res_ag->num_rows > 0) ? intval($res_ag->fetch_assoc()['agent_id']) : 0;
+                $stmt_ag->close();
+
+                if ($ag_id > 0) {
+                    $trans_desc = "Admin Closure Settlement: " . $notes;
+                    $stmt_wallet = $conn->prepare("INSERT INTO wallet_transactions (agent_id, loan_id, transaction_type, amount, description) VALUES (?, ?, 'emi-received', ?, ?)");
+                    $stmt_wallet->bind_param("iids", $ag_id, $loan_id, $amount_paid, $trans_desc);
+                    $stmt_wallet->execute();
+                    $stmt_wallet->close();
+
+                    $conn->query("UPDATE agent_wallets SET balance = balance + $amount_paid WHERE agent_id = $ag_id");
+                }
+            }
+
+            $stmt_close = $conn->prepare("UPDATE loans SET status = 'closed', notes = CONCAT(IFNULL(notes, ''), '\n[Admin Closed]: ', ?) WHERE id = ?");
+            $stmt_close->bind_param("si", $notes, $loan_id);
+            $stmt_close->execute();
+            $stmt_close->close();
+
+            $conn->commit();
+            $_SESSION['message'] = "<div class='alert alert-success'>Loan account has been closed successfully. Status updated to 'Closed'.</div>";
+        } catch (mysqli_sql_exception $exception) {
+            $conn->rollback();
+            $_SESSION['message'] = "<div class='alert alert-danger'>Error closing loan: " . $exception->getMessage() . "</div>";
         }
         header("Location: admin-loan-details.php?id=" . $loan_id);
         exit();
@@ -166,7 +210,24 @@ if ($payments_result->num_rows > 0) {
         }
     }
 }
-$progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $loan['total_repayable_amount']) * 100 : 0;
+$status_clean = strtolower(trim($loan['status']));
+if ($total_paid >= (float)$loan['total_repayable_amount'] - 0.01 && !in_array($status_clean, ['closed', 'paid', 'rejected', 'premature-closed'])) {
+    $conn->query("UPDATE loans SET status = 'paid' WHERE id = " . intval($loan_id));
+    $loan['status'] = 'paid';
+    $status_clean = 'paid';
+}
+
+if (in_array($status_clean, ['closed', 'paid'])) {
+    $progress_percentage = 100;
+    $total_paid = max($total_paid, (float)$loan['total_repayable_amount']);
+    $paid_emis_count = (int)$loan['tenure'];
+} else {
+    $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $loan['total_repayable_amount']) * 100 : 0;
+    if ($loan['monthly_installment'] > 0) {
+        $calc_emis = (int)floor($total_paid / (float)$loan['monthly_installment']);
+        $paid_emis_count = min((int)$loan['tenure'], max($paid_emis_count, $calc_emis));
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -241,7 +302,7 @@ $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $l
                                 </div>
                             </div>
                             
-                            <?php if ($loan['status'] == 'pending'): ?>
+                            <?php if ($status_clean == 'pending'): ?>
                             <div class="card">
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">Take Action</h5>
@@ -254,9 +315,16 @@ $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $l
                                     </div>
                                 </div>
                             </div>
+                            <?php elseif (!in_array($status_clean, ['rejected', 'paid', 'closed', 'premature-closed']) && $total_paid < (float)$loan['total_repayable_amount'] - 0.01): ?>
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-3">Account Management</h5>
+                                    <button class="btn btn-warning w-100" data-bs-toggle="modal" data-bs-target="#closeLoanModal"><i class="ri-lock-2-line me-1"></i> Close Loan Account</button>
+                                </div>
+                            </div>
                             <?php endif; ?>
 
-                            <?php if (in_array($loan['status'], ['rejected', 'paid', 'closed'])): ?>
+                            <?php if (in_array($status_clean, ['rejected', 'paid', 'closed', 'premature-closed']) || $total_paid >= (float)$loan['total_repayable_amount'] - 0.01): ?>
                             <div class="card">
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">Admin Actions</h5>
@@ -326,6 +394,35 @@ $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $l
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-danger">Confirm Rejection</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="closeLoanModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="POST" action="admin-loan-details.php?id=<?php echo $loan_id; ?>">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Close Loan Account</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>You are about to close this active loan. Once closed, the status will be updated to <strong>Closed</strong> across all views.</p>
+                        <div class="mb-3">
+                            <label class="form-label">Final Settlement / Amount Paid Today (Optional)</label>
+                            <input type="number" step="0.01" name="amount_paid" class="form-control" placeholder="0.00">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Closure Notes / Reason</label>
+                            <textarea name="notes" class="form-control" rows="3" placeholder="Enter settlement or closure notes..."></textarea>
+                        </div>
+                        <input type="hidden" name="action" value="close_loan">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-warning">Confirm Closure</button>
                     </div>
                 </form>
             </div>

@@ -35,7 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $status = ($result->num_rows > 0) ? $result->fetch_assoc()['status'] : '';
         $status_check_stmt->close();
 
-        if (in_array($status, ['rejected', 'closed', 'matured', 'premature-closed'])) {
+        $status_clean_check = strtolower(trim($status));
+        if (in_array($status_clean_check, ['rejected', 'closed', 'matured', 'premature-closed'])) {
             $conn->begin_transaction();
             try {
                 // Delete associated RD payments
@@ -66,6 +67,49 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             }
         } else {
             $_SESSION['message'] = "<div class='alert alert-danger'>Only rejected or completed RDs can be deleted.</div>";
+        }
+        header("Location: admin-rd-details.php?id=" . $rd_id);
+        exit();
+    } elseif ($action == 'close' || $action == 'close_rd') {
+        $notes = $_POST['notes'] ?? 'Closed by admin.';
+        $amount_paid = floatval($_POST['amount_paid'] ?? 0);
+        
+        $conn->begin_transaction();
+        try {
+            if ($amount_paid > 0) {
+                $stmt_pay = $conn->prepare("INSERT INTO rd_payments (rd_id, amount_paid, payment_date, notes, status) VALUES (?, ?, NOW(), ?, 'approved')");
+                $stmt_pay->bind_param("ids", $rd_id, $amount_paid, $notes);
+                $stmt_pay->execute();
+                $stmt_pay->close();
+
+                $stmt_ag = $conn->prepare("SELECT agent_id FROM recurring_deposits WHERE id = ?");
+                $stmt_ag->bind_param("i", $rd_id);
+                $stmt_ag->execute();
+                $res_ag = $stmt_ag->get_result();
+                $ag_id = ($res_ag->num_rows > 0) ? intval($res_ag->fetch_assoc()['agent_id']) : 0;
+                $stmt_ag->close();
+
+                if ($ag_id > 0) {
+                    $trans_desc = "Admin RD Closure Deposit: " . $notes;
+                    $stmt_wallet = $conn->prepare("INSERT INTO wallet_transactions (agent_id, rd_id, transaction_type, amount, description) VALUES (?, ?, 'rd-received', ?, ?)");
+                    $stmt_wallet->bind_param("iids", $ag_id, $rd_id, $amount_paid, $trans_desc);
+                    $stmt_wallet->execute();
+                    $stmt_wallet->close();
+
+                    $conn->query("UPDATE agent_wallets SET balance = balance + $amount_paid WHERE agent_id = $ag_id");
+                }
+            }
+
+            $stmt_close = $conn->prepare("UPDATE recurring_deposits SET status = 'closed', notes = CONCAT(IFNULL(notes, ''), '\n[Admin Closed]: ', ?) WHERE id = ?");
+            $stmt_close->bind_param("si", $notes, $rd_id);
+            $stmt_close->execute();
+            $stmt_close->close();
+
+            $conn->commit();
+            $_SESSION['message'] = "<div class='alert alert-success'>RD account has been closed successfully. Status updated to 'Closed'.</div>";
+        } catch (mysqli_sql_exception $exception) {
+            $conn->rollback();
+            $_SESSION['message'] = "<div class='alert alert-danger'>Error closing RD: " . $exception->getMessage() . "</div>";
         }
         header("Location: admin-rd-details.php?id=" . $rd_id);
         exit();
@@ -154,7 +198,24 @@ if ($payments_result->num_rows > 0) {
         }
     }
 }
-$progress_percentage = ($rd['tenure'] > 0) ? ($installments_paid_count / $rd['tenure']) * 100 : 0;
+$status_clean = strtolower(trim($rd['status']));
+$total_expected_deposit = (float)$rd['deposit_amount'] * (int)$rd['tenure'];
+if ($total_principal_paid >= $total_expected_deposit - 0.01 && !in_array($status_clean, ['matured', 'closed', 'premature-closed', 'rejected'])) {
+    $conn->query("UPDATE recurring_deposits SET status = 'matured' WHERE id = " . intval($rd_id));
+    $rd['status'] = 'matured';
+    $status_clean = 'matured';
+}
+
+if (in_array($status_clean, ['matured', 'closed', 'premature-closed'])) {
+    $installments_paid_count = (int)$rd['tenure'];
+    $progress_percentage = 100;
+} else {
+    if ($rd['deposit_amount'] > 0) {
+        $calc_inst = (int)floor($total_principal_paid / (float)$rd['deposit_amount']);
+        $installments_paid_count = min((int)$rd['tenure'], max($installments_paid_count, $calc_inst));
+    }
+    $progress_percentage = ($rd['tenure'] > 0) ? ($installments_paid_count / $rd['tenure']) * 100 : 0;
+}
 
 ?>
 <!DOCTYPE html>
@@ -181,12 +242,12 @@ $progress_percentage = ($rd['tenure'] > 0) ? ($installments_paid_count / $rd['te
                                         <li class="list-group-item d-flex justify-content-between"><strong>Status:</strong>
                                             <?php
                                                 $status_color = 'primary'; // active
-                                                if ($rd['status'] == 'pending') $status_color = 'warning';
-                                                elseif ($rd['status'] == 'matured' || $rd['status'] == 'closed') $status_color = 'success';
-                                                elseif ($rd['status'] == 'premature-closed') $status_color = 'info';
-                                                elseif ($rd['status'] == 'rejected') $status_color = 'danger';
+                                                if ($status_clean == 'pending') $status_color = 'warning';
+                                                elseif ($status_clean == 'matured' || $status_clean == 'closed') $status_color = 'success';
+                                                elseif ($status_clean == 'premature-closed') $status_color = 'info';
+                                                elseif ($status_clean == 'rejected') $status_color = 'danger';
                                             ?>
-                                            <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucwords(str_replace('-', ' ', $rd['status'])); ?></span>
+                                            <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucwords(str_replace('-', ' ', $status_clean)); ?></span>
                                         </li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Installment:</strong> ₹<?php echo number_format($rd['deposit_amount'], 2); ?> / <?php echo ucfirst($rd['repayment_cycle']); ?></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Tenure (Total):</strong> <?php echo $rd['tenure']; ?> Installments</li>
@@ -239,11 +300,18 @@ $progress_percentage = ($rd['tenure'] > 0) ? ($installments_paid_count / $rd['te
                             </div>
                             <?php endif; ?>
 
-                            <?php if (in_array($rd['status'], ['rejected', 'closed', 'matured', 'premature-closed'])): ?>
+                            <?php if (in_array($status_clean, ['rejected', 'closed', 'matured', 'premature-closed']) || $total_principal_paid >= ((float)$rd['deposit_amount'] * (int)$rd['tenure']) - 0.01): ?>
                             <div class="card">
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">Admin Actions</h5>
                                     <button class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteRDModal"><i class="ri-delete-bin-line me-1"></i> Delete RD Record</button>
+                                </div>
+                            </div>
+                            <?php elseif (!in_array($status_clean, ['pending', 'rejected', 'closed', 'matured', 'premature-closed']) && $total_principal_paid < ((float)$rd['deposit_amount'] * (int)$rd['tenure']) - 0.01): ?>
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-3">Account Management</h5>
+                                    <button class="btn btn-warning w-100" data-bs-toggle="modal" data-bs-target="#closeRDModal"><i class="ri-lock-2-line me-1"></i> Close RD Account</button>
                                 </div>
                             </div>
                             <?php endif; ?>
@@ -308,6 +376,35 @@ $progress_percentage = ($rd['tenure'] > 0) ? ($installments_paid_count / $rd['te
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-danger">Confirm Rejection</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="closeRDModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="POST" action="admin-rd-details.php?id=<?php echo $rd_id; ?>">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Close RD Account</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>You are about to close this active Recurring Deposit. Once closed, the status will be updated to <strong>Closed</strong> across all views.</p>
+                        <div class="mb-3">
+                            <label class="form-label">Final Settlement / Amount Deposited Today (Optional)</label>
+                            <input type="number" step="0.01" name="amount_paid" class="form-control" placeholder="0.00">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Closure Notes / Reason</label>
+                            <textarea name="notes" class="form-control" rows="3" placeholder="Enter settlement or closure notes..."></textarea>
+                        </div>
+                        <input type="hidden" name="action" value="close_rd">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-warning">Confirm Closure</button>
                     </div>
                 </form>
             </div>

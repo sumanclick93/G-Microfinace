@@ -137,9 +137,35 @@ if ($payments_result->num_rows > 0) {
 }
 
 // Calculate progress
-$total_principal_due = $rd['deposit_amount'] * $rd['tenure'];
-$remaining_installments = $rd['tenure'] - $installments_paid_count;
-$progress_percentage = ($rd['tenure'] > 0) ? ($installments_paid_count / $rd['tenure']) * 100 : 0;
+$total_principal_due = (float)$rd['deposit_amount'] * (int)$rd['tenure'];
+$status_clean = strtolower(trim($rd['status']));
+if ($total_principal_paid >= $total_principal_due - 0.01 && !in_array($status_clean, ['matured', 'closed', 'premature-closed', 'rejected'])) {
+    $conn->query("UPDATE recurring_deposits SET status = 'matured' WHERE id = " . intval($rd_id));
+    $rd['status'] = 'matured';
+    $status_clean = 'matured';
+}
+
+$installments_paid_count = 0;
+foreach ($rd_payments as $rp) {
+    if ($rp['status'] === 'approved') $installments_paid_count++;
+}
+
+if (in_array($status_clean, ['matured', 'closed'])) {
+    $installments_paid_count = (int)$rd['tenure'];
+    $progress_percentage = 100;
+    $remaining_installments = 0;
+    $total_principal_paid = max($total_principal_paid, $total_principal_due);
+} elseif ($status_clean === 'premature-closed') {
+    $progress_percentage = 100;
+    $remaining_installments = 0;
+} else {
+    if ($rd['deposit_amount'] > 0) {
+        $calc_inst = (int)floor($total_principal_paid / (float)$rd['deposit_amount']);
+        $installments_paid_count = min((int)$rd['tenure'], max($installments_paid_count, $calc_inst));
+    }
+    $remaining_installments = max(0, (int)$rd['tenure'] - $installments_paid_count);
+    $progress_percentage = ($rd['tenure'] > 0) ? ($installments_paid_count / $rd['tenure']) * 100 : 0;
+}
 ?>
 
 <!DOCTYPE html>
@@ -163,7 +189,16 @@ $progress_percentage = ($rd['tenure'] > 0) ? ($installments_paid_count / $rd['te
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">RD Summary</h5>
                                     <ul class="list-group list-group-flush">
-                                        <li class="list-group-item d-flex justify-content-between"><strong>Status:</strong> <span class="badge bg-primary"><?php echo ucwords(str_replace('-', ' ', $rd['status'])); ?></span></li>
+                                        <li class="list-group-item d-flex justify-content-between"><strong>Status:</strong>
+                                            <?php
+                                                $status_color = 'primary'; // active
+                                                if ($status_clean == 'pending') $status_color = 'warning';
+                                                elseif ($status_clean == 'matured' || $status_clean == 'closed') $status_color = 'success';
+                                                elseif ($status_clean == 'premature-closed') $status_color = 'info';
+                                                elseif ($status_clean == 'rejected') $status_color = 'danger';
+                                            ?>
+                                            <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucwords(str_replace('-', ' ', $status_clean)); ?></span>
+                                        </li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Customer:</strong> <?php echo htmlspecialchars($rd['customer_name']); ?></li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Installment:</strong> ₹<?php echo number_format($rd['deposit_amount'], 2); ?> / <?php echo ucfirst($rd['repayment_cycle']); ?></li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Tenure:</strong> <?php echo $rd['tenure']; ?> Installments</li>

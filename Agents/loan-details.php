@@ -105,8 +105,31 @@ if ($payments_result->num_rows > 0) {
         $total_paid += $row['amount_paid'];
     }
 }
-$remaining_balance = $loan['total_repayable_amount'] - $total_paid;
-$progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $loan['total_repayable_amount']) * 100 : 0;
+$status_clean = strtolower(trim($loan['status']));
+if ($total_paid >= (float)$loan['total_repayable_amount'] - 0.01 && !in_array($status_clean, ['closed', 'paid', 'rejected', 'premature-closed'])) {
+    $conn->query("UPDATE loans SET status = 'paid' WHERE id = " . intval($loan_id));
+    $loan['status'] = 'paid';
+    $status_clean = 'paid';
+}
+
+$paid_emis_count = 0;
+foreach ($payments as $p) {
+    if ($p['status'] === 'approved') $paid_emis_count++;
+}
+
+if (in_array($status_clean, ['closed', 'paid'])) {
+    $progress_percentage = 100;
+    $total_paid = max($total_paid, (float)$loan['total_repayable_amount']);
+    $remaining_balance = 0;
+    $paid_emis_count = (int)$loan['tenure'];
+} else {
+    $remaining_balance = max(0, $loan['total_repayable_amount'] - $total_paid);
+    $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $loan['total_repayable_amount']) * 100 : 0;
+    if ($loan['monthly_installment'] > 0) {
+        $calc_emis = (int)floor($total_paid / (float)$loan['monthly_installment']);
+        $paid_emis_count = min((int)$loan['tenure'], max($paid_emis_count, $calc_emis));
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -135,6 +158,8 @@ $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $l
                                         <li class="list-group-item d-flex justify-content-between"><strong>Principal Amount:</strong> ₹<?php echo number_format($loan['loan_amount'], 2); ?></li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Total Repayable:</strong> ₹<?php echo number_format($loan['total_repayable_amount'], 2); ?></li>
                                         <li class="list-group-item d-flex justify-content-between"><strong>Installment (EMI):</strong> ₹<?php echo number_format($loan['monthly_installment'], 2); ?></li>
+                                        <li class="list-group-item d-flex justify-content-between"><strong>Tenure (Total EMIs):</strong> <?php echo $loan['tenure'] . ' ' . ucfirst($loan['repayment_cycle']) . 's'; ?></li>
+                                        <li class="list-group-item d-flex justify-content-between"><strong>EMIs Paid:</strong> <span><strong><?php echo $paid_emis_count; ?></strong> of <?php echo $loan['tenure']; ?></span></li>
                                     </ul>
                                 </div>
                             </div>

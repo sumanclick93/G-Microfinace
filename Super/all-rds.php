@@ -242,17 +242,21 @@ $stmt->close();
                                                             <td><?php echo htmlspecialchars($rd['customer_name']); ?></td>
                                                             <td><?php echo htmlspecialchars($rd['agent_first_name'] . ' ' . $rd['agent_last_name']); ?></td>
                                                             <td>₹<?php echo number_format($rd['deposit_amount']); ?> / <?php echo ucfirst($rd['repayment_cycle']);?></td>
-                                                            <td><strong><?php echo $rd['paid_installments'] . ' / ' . $rd['tenure']; ?></strong></td>
+                                                            <td><strong><?php
+                                                                $status_clean = strtolower(trim($rd['status']));
+                                                                $display_inst = in_array($status_clean, ['closed', 'matured']) ? $rd['tenure'] : $rd['paid_installments'];
+                                                                echo $display_inst . ' / ' . $rd['tenure'];
+                                                            ?></strong></td>
                                                             <td><?php echo date('d M, Y', strtotime($rd['start_date'])); ?></td>
                                                             <td>
                                                                 <?php
                                                                     $status_color = 'primary'; // active
-                                                                    if ($rd['status'] == 'pending') $status_color = 'warning';
-                                                                    elseif ($rd['status'] == 'matured' || $rd['status'] == 'closed') $status_color = 'success';
-                                                                    elseif ($rd['status'] == 'premature-closed') $status_color = 'info';
-                                                                    elseif ($rd['status'] == 'rejected') $status_color = 'danger';
+                                                                    if ($status_clean == 'pending') $status_color = 'warning';
+                                                                    elseif ($status_clean == 'matured' || $status_clean == 'closed') $status_color = 'success';
+                                                                    elseif ($status_clean == 'premature-closed') $status_color = 'info';
+                                                                    elseif ($status_clean == 'rejected') $status_color = 'danger';
                                                                 ?>
-                                                                <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucwords(str_replace('-', ' ', $rd['status'])); ?></span>
+                                                                <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucwords(str_replace('-', ' ', $status_clean)); ?></span>
                                                             </td>
                                                             <td>
                                                                 <ul>

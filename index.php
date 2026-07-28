@@ -36,6 +36,19 @@
             overflow-x: hidden;
         }
 
+        /* Foundation top bar */
+        .samaj-foundation-bar {
+            background: linear-gradient(90deg, #0f5132 0%, #198754 55%, #0f5132 100%);
+            color: #fff;
+            text-align: center;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            padding: 0.55rem 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
         /* Navbar Styling */
         .navbar {
             background: rgba(255, 255, 255, 0.8) !important;
@@ -564,8 +577,11 @@
 </head>
 <body>
 
+    <div class="sticky-top">
+    <div class="samaj-foundation-bar" role="banner">Samajbandhan Foundation</div>
+
     <!-- Navigation Header -->
-    <nav class="navbar navbar-expand-lg navbar-light sticky-top">
+    <nav class="navbar navbar-expand-lg navbar-light">
         <div class="container">
             <a class="navbar-brand d-flex align-items-center gap-2" href="#">
                 <img src="Super/assets/images/logo/1.png?v=<?php echo time(); ?>" alt="G-Microfinance Logo" style="max-height: 45px;">
@@ -589,6 +605,7 @@
             </div>
         </div>
     </nav>
+    </div>
 
     <!-- Hero Section -->
     <header class="hero-section">

@@ -34,11 +34,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['selected_accounts']))
             $desc = ($action === 'withdraw') ? 'Agent ' . strtoupper($type) . ' Withdrawal' : 'Agent ' . strtoupper($type) . ' Collection';
             
             if ($type === 'loan') {
-                $conn->query("INSERT INTO payments (loan_id, amount_paid, payment_date) VALUES ($account_id, $db_amount, '$logged_time')");
+                $check_owner = $conn->query("SELECT c.agent_id FROM loans l JOIN customers c ON l.customer_id = c.id WHERE l.id = $account_id");
+                if (!$check_owner || ($row_owner = $check_owner->fetch_assoc())['agent_id'] != $agent_id) {
+                    continue;
+                }
+                $conn->query("INSERT INTO payments (loan_id, amount_paid, collected_by_agent_id, payment_date) VALUES ($account_id, $db_amount,$agent_id, '$logged_time')");
+                // $conn->query("INSERT INTO loan_payments_collection (loan_id, amount_paid, collected_by_agent_id, payment_date) VALUES ($account_id, $db_amount, $agent_id, '$logged_time')");
                 $conn->query("INSERT INTO wallet_transactions (agent_id, loan_id, transaction_type, amount, description) VALUES ($agent_id, $account_id, '$trans_type', $db_amount, '$desc')");
+                // Check if the loan is now fully paid
+                $check_loan = $conn->query("SELECT l.total_repayable_amount, COALESCE(SUM(p.amount_paid), 0) as paid FROM loans l LEFT JOIN payments p ON l.id = p.loan_id WHERE l.id = $account_id AND (p.status != 'rejected' OR p.status IS NULL)");
+                if ($check_loan && $row_loan = $check_loan->fetch_assoc()) {
+                    if (floatval($row_loan['paid']) >= floatval($row_loan['total_repayable_amount']) && floatval($row_loan['total_repayable_amount']) > 0) {
+                        $conn->query("UPDATE loans SET status = 'paid' WHERE id = $account_id AND status NOT IN ('closed', 'paid')");
+                    }
+                }
             } elseif ($type === 'rd') {
-                $conn->query("INSERT INTO rd_payments (rd_id, amount_paid, payment_date) VALUES ($account_id, $db_amount, '$logged_time')");
+                $check_owner = $conn->query("SELECT c.agent_id FROM recurring_deposits rd JOIN customers c ON rd.customer_id = c.id WHERE rd.id = $account_id");
+                if (!$check_owner || ($row_owner = $check_owner->fetch_assoc())['agent_id'] != $agent_id) {
+                    continue;
+                }
+                $conn->query("INSERT INTO rd_payments (rd_id, amount_paid, collected_by_agent_id, payment_date) VALUES ($account_id, $db_amount, $agent_id, '$logged_time')");
+                // $conn->query("INSERT INTO rd_payments_collection (rd_id, amount_paid, collected_by_agent_id, payment_date) VALUES ($account_id, $db_amount, $agent_id, '$logged_time')");
                 $conn->query("INSERT INTO wallet_transactions (agent_id, rd_id, transaction_type, amount, description) VALUES ($agent_id, $account_id, '$trans_type', $db_amount, '$desc')");
+                // Check if the RD has reached maturity (all EMIs/installments paid)
+                $check_rd = $conn->query("SELECT rd.tenure, COUNT(p.id) as cnt FROM recurring_deposits rd LEFT JOIN rd_payments p ON rd.id = p.rd_id WHERE rd.id = $account_id AND (p.status != 'rejected' OR p.status IS NULL)");
+                if ($check_rd && $row_rd = $check_rd->fetch_assoc()) {
+                    if (intval($row_rd['cnt']) >= intval($row_rd['tenure']) && intval($row_rd['tenure']) > 0) {
+                        $conn->query("UPDATE recurring_deposits SET status = 'matured' WHERE id = $account_id AND status NOT IN ('closed', 'matured')");
+                    }
+                }
             }
             
             // Updates agent wallet (+ for deposit, - for withdrawal)
@@ -49,56 +73,140 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['selected_accounts']))
     exit();
 }
 
-// 3. Fetch Data using indestructible PHP Arrays
+// 3. Helper: pending EMI/installment amount for an account
+function get_pending_emi($start_date_str, $repayment_cycle, $tenure, $installment_amount, $total_paid, $remaining) {
+    $remaining = max(0.0, (float)$remaining);
+    $installment_amount = (float)$installment_amount;
+    $one_emi = ($installment_amount > 0) ? min($installment_amount, $remaining) : $remaining;
+
+    if ($remaining <= 0) {
+        return 0.0;
+    }
+    if (empty($start_date_str) || $start_date_str === '0000-00-00' || $start_date_str === '0000-00-00 00:00:00') {
+        return $one_emi;
+    }
+
+    try {
+        $start_date = new DateTime($start_date_str);
+        $start_date->setTime(0, 0, 0);
+        $today = new DateTime();
+        $today->setTime(0, 0, 0);
+
+        if ($today <= $start_date) {
+            return $one_emi;
+        }
+
+        $interval_str = '1 month';
+        switch (strtolower((string)$repayment_cycle)) {
+            case 'daily': $interval_str = '1 day'; break;
+            case 'weekly': $interval_str = '1 week'; break;
+            case 'monthly': $interval_str = '1 month'; break;
+            case 'quarterly': $interval_str = '3 months'; break;
+            case 'half-yearly': $interval_str = '6 months'; break;
+            case 'annually': $interval_str = '1 year'; break;
+        }
+
+        $installments_due = 0;
+        $temp_date = clone $start_date;
+        while ($temp_date < $today && $installments_due < (int)$tenure) {
+            $temp_date->modify('+' . $interval_str);
+            if ($temp_date <= $today) {
+                $installments_due++;
+            }
+        }
+
+        $expected_paid = $installments_due * $installment_amount;
+        $overdue = max(0.0, $expected_paid - (float)$total_paid);
+        $pending = min($overdue, $remaining);
+
+        if ($pending <= 0 && $remaining > 0) {
+            $pending = $one_emi;
+        }
+
+        return $pending;
+    } catch (Exception $e) {
+        return $one_emi;
+    }
+}
+
+// 4. Fetch Data using indestructible PHP Arrays
 $active_accounts = [];
 
-// A. Fetch Loans belonging to this Agent
+// A. Fetch Loans belonging to this Agent's customers (skip closed / completed)
 $loans_query = "
     SELECT 
         l.id as account_id,
         c.full_name as customer_name,
         c.avatar as customer_photo,
         COALESCE(l.total_repayable_amount, 0) as target_amount,
-        (SELECT COALESCE(SUM(amount_paid), 0) FROM payments WHERE loan_id = l.id) as total_paid
+        COALESCE(l.monthly_installment, 0) as installment_amount,
+        COALESCE(l.tenure, 0) as tenure,
+        l.repayment_cycle,
+        l.approval_date as start_date,
+        (SELECT COALESCE(SUM(amount_paid), 0) FROM payments WHERE loan_id = l.id AND status != 'rejected') as total_paid
     FROM loans l
-    LEFT JOIN customers c ON l.customer_id = c.id
-    WHERE l.agent_id = $agent_id
+    JOIN customers c ON l.customer_id = c.id
+    WHERE c.agent_id = $agent_id
+      AND LOWER(TRIM(l.status)) IN ('active', 'approved', 'pending')
 ";
 $loans_res = $conn->query($loans_query);
 if ($loans_res && $loans_res->num_rows > 0) {
     while ($row = $loans_res->fetch_assoc()) {
         $target = floatval($row['target_amount']);
         $paid = floatval($row['total_paid']);
-        if (($target - $paid) > 0) { 
+        $remaining = $target - $paid;
+        if ($remaining > 0.01) { 
             $row['account_type'] = 'loan';
             $row['display_type'] = 'Loan EMI';
             $row['badge_color'] = '#17a2b8';
+            $row['pending_emi'] = get_pending_emi(
+                $row['start_date'],
+                $row['repayment_cycle'],
+                $row['tenure'],
+                $row['installment_amount'],
+                $paid,
+                $remaining
+            );
             $active_accounts[] = $row;
         }
     }
 }
 
-// B. Fetch RDs belonging to this Agent
+// B. Fetch RDs belonging to this Agent's customers (skip closed / matured / completed)
 $rds_query = "
     SELECT 
         rd.id as account_id,
         c.full_name as customer_name,
         c.avatar as customer_photo,
         COALESCE((rd.deposit_amount * rd.tenure), 0) as target_amount,
-        (SELECT COALESCE(SUM(amount_paid), 0) FROM rd_payments WHERE rd_id = rd.id) as total_paid
+        COALESCE(rd.deposit_amount, 0) as installment_amount,
+        COALESCE(rd.tenure, 0) as tenure,
+        rd.repayment_cycle,
+        rd.start_date,
+        (SELECT COALESCE(SUM(amount_paid), 0) FROM rd_payments WHERE rd_id = rd.id AND status != 'rejected') as total_paid
     FROM recurring_deposits rd
-    LEFT JOIN customers c ON rd.customer_id = c.id
-    WHERE rd.agent_id = $agent_id
+    JOIN customers c ON rd.customer_id = c.id
+    WHERE c.agent_id = $agent_id
+      AND LOWER(TRIM(rd.status)) IN ('active', 'approved', 'pending')
 ";
 $rds_res = $conn->query($rds_query);
 if ($rds_res && $rds_res->num_rows > 0) {
     while ($row = $rds_res->fetch_assoc()) {
         $target = floatval($row['target_amount']);
         $paid = floatval($row['total_paid']);
-        if (($target - $paid) > 0) { 
+        $remaining = $target - $paid;
+        if ($remaining > 0.01) { 
             $row['account_type'] = 'rd';
             $row['display_type'] = 'RD Deposit';
             $row['badge_color'] = '#28a745';
+            $row['pending_emi'] = get_pending_emi(
+                $row['start_date'],
+                $row['repayment_cycle'],
+                $row['tenure'],
+                $row['installment_amount'],
+                $paid,
+                $remaining
+            );
             $active_accounts[] = $row;
         }
     }
@@ -187,6 +295,7 @@ usort($active_accounts, function($a, $b) {
                                                         <th>Account Type</th>
                                                         <th>Target Amount</th>
                                                         <th>Remaining Balance</th>
+                                                        <th>Pending EMI</th>
                                                         <th>Transaction Action</th>
                                                     </tr>
                                                 </thead>
@@ -198,6 +307,7 @@ usort($active_accounts, function($a, $b) {
                                                             $target = floatval($row['target_amount']);
                                                             $paid = floatval($row['total_paid']);
                                                             $remaining = $target - $paid;
+                                                            $pending_emi = floatval($row['pending_emi'] ?? 0);
                                                             
                                                             $unique_key = $row['account_type'] . '_' . $row['account_id'];
                                                             $name = !empty($row['customer_name']) ? $row['customer_name'] : 'Unknown Customer';
@@ -205,7 +315,7 @@ usort($active_accounts, function($a, $b) {
                                                     ?>
                                                         <tr>
                                                             <td style="display:none;"><?php echo htmlspecialchars($name); ?></td>
-                                                            <td style="font-weight: 500; font-size: 14px;"><?php echo $s_no++; ?></td>
+                                                            <td class="sno-cell" style="font-weight: 500; font-size: 14px;"><?php echo $s_no++; ?></td>
 
                                                             <td style="font-size: 14px;">
                                                                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -222,6 +332,9 @@ usort($active_accounts, function($a, $b) {
 
                                                             <td style="font-weight: 500; color: #555;">₹<?php echo number_format($target, 2); ?></td>
                                                             <td style="color:#dc3545; font-weight: bold;">₹<?php echo number_format($remaining, 2); ?></td>
+                                                            <td style="color:<?php echo $pending_emi > 0 ? '#fd7e14' : '#28a745'; ?>; font-weight: bold;">
+                                                                ₹<?php echo number_format($pending_emi, 2); ?>
+                                                            </td>
 
                                                             <td>
                                                                 <input type="checkbox" name="selected_accounts[]" value="<?php echo $unique_key; ?>" id="chk_<?php echo $unique_key; ?>" style="display:none;">
@@ -241,7 +354,9 @@ usort($active_accounts, function($a, $b) {
                                                                            style="font-weight: bold; color: #28a745;">
                                                                     
                                                                     <button class="btn btn-outline-primary btn-full" type="button"
-                                                                            data-key="<?php echo $unique_key; ?>" data-max="<?php echo $remaining; ?>">
+                                                                            data-key="<?php echo $unique_key; ?>"
+                                                                            data-max="<?php echo $remaining; ?>"
+                                                                            data-pending="<?php echo $pending_emi; ?>">
                                                                             FULL
                                                                     </button>
                                                                 </div>
@@ -283,6 +398,11 @@ usort($active_accounts, function($a, $b) {
                 ]
             });
 
+            // Enable mobile card view (default on screens <= 768px), same as All Customer page
+            if (typeof window.initMobileCardView === 'function') {
+                window.initMobileCardView($('#collection_table'));
+            }
+
             // Handle Customer Filtering
             $('.custom-filter-trigger').on('change', function () {
                 var val = $.fn.dataTable.util.escapeRegex($(this).val());
@@ -302,11 +422,13 @@ usort($active_accounts, function($a, $b) {
                 $('#chk_' + key).prop('checked', (val > 0));
             });
 
-            // "FULL" Button auto-fill
+            // "FULL" Button auto-fill — prefers pending EMI, falls back to remaining balance
             $(document).on('click', '.btn-full', function() {
                 var key = $(this).data('key');
-                var maxBalance = parseFloat($(this).data('max')).toFixed(2);
-                $('#amt_' + key).val(maxBalance);
+                var pending = parseFloat($(this).data('pending')) || 0;
+                var maxBalance = parseFloat($(this).data('max')) || 0;
+                var fillAmount = (pending > 0 ? pending : maxBalance).toFixed(2);
+                $('#amt_' + key).val(fillAmount);
                 $('#amt_' + key).trigger('input'); // Trigger auto-check
             });
 

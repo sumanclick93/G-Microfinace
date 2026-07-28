@@ -96,14 +96,91 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_id'])) {
     }
 }
 
-// --- Fetch All Active Agents from Database ---
+// --- Fetch All Active Agents from Database along with Loan and RD Summary Stats ---
 $agents = [];
 $sql = "SELECT id, username, first_name, last_name, phone, email, avatar FROM agents WHERE is_active = 1 ORDER BY id DESC";
 $result = $conn->query($sql);
-if ($result->num_rows > 0) {
+if ($result && $result->num_rows > 0) {
+    // Prepare statement to fetch loan stats for each agent
+    $stmt_loan_stats = $conn->prepare("
+        SELECT 
+            COALESCE(SUM(l.loan_amount), 0) as total_principal,
+            COALESCE(SUM(l.total_repayable_amount), 0) as total_repayable,
+            COALESCE(SUM(
+                (SELECT COALESCE(SUM(p.amount_paid), 0) FROM payments p WHERE p.loan_id = l.id AND p.status != 'rejected')
+            ), 0) as total_collected,
+            COALESCE(SUM(
+                CASE WHEN LOWER(TRIM(l.status)) NOT IN ('paid', 'rejected', 'closed', 'settled') 
+                     THEN GREATEST(0, l.total_repayable_amount - COALESCE((SELECT SUM(p.amount_paid) FROM payments p WHERE p.loan_id = l.id AND p.status != 'rejected'), 0))
+                     ELSE 0 
+                END
+            ), 0) as total_pending
+        FROM loans l
+        WHERE l.agent_id = ? AND LOWER(TRIM(l.status)) != 'rejected'
+    ");
+
+    // Prepare statement to fetch RD stats for each agent
+    $stmt_rd_stats = $conn->prepare("
+        SELECT 
+            COALESCE(SUM(rd.deposit_amount * rd.tenure), 0) as total_deposit,
+            COALESCE(SUM(rd.maturity_amount), 0) as total_maturity,
+            COALESCE(SUM(
+                (SELECT COALESCE(SUM(rp.amount_paid), 0) FROM rd_payments rp WHERE rp.rd_id = rd.id AND rp.status != 'rejected')
+            ), 0) as total_collected,
+            COALESCE(SUM(
+                CASE WHEN LOWER(TRIM(rd.status)) NOT IN ('matured', 'closed', 'premature-closed', 'settled', 'rejected') 
+                     THEN GREATEST(0, (rd.deposit_amount * rd.tenure) - COALESCE((SELECT SUM(rp.amount_paid) FROM rd_payments rp WHERE rp.rd_id = rd.id AND rp.status != 'rejected'), 0))
+                     ELSE 0 
+                END
+            ), 0) as total_pending
+        FROM recurring_deposits rd
+        WHERE rd.agent_id = ? AND LOWER(TRIM(rd.status)) != 'rejected'
+    ");
+
     while ($row = $result->fetch_assoc()) {
+        $aid = (int)$row['id'];
+        
+        $loan_stats = ['total' => 0.0, 'collected' => 0.0, 'pending' => 0.0];
+        $rd_stats = ['total' => 0.0, 'collected' => 0.0, 'pending' => 0.0];
+
+        try {
+            if ($stmt_loan_stats) {
+                $stmt_loan_stats->bind_param("i", $aid);
+                $stmt_loan_stats->execute();
+                $l_res = $stmt_loan_stats->get_result()->fetch_assoc();
+                if ($l_res) {
+                    $loan_stats['total'] = (float)$l_res['total_repayable'];
+                    $loan_stats['collected'] = (float)$l_res['total_collected'];
+                    $loan_stats['pending'] = (float)$l_res['total_pending'];
+                }
+            }
+        } catch (Throwable $e) {
+            // Safe fallback to 0
+        }
+
+        try {
+            if ($stmt_rd_stats) {
+                $stmt_rd_stats->bind_param("i", $aid);
+                $stmt_rd_stats->execute();
+                $r_res = $stmt_rd_stats->get_result()->fetch_assoc();
+                if ($r_res) {
+                    $rd_stats['total'] = (float)$r_res['total_deposit'];
+                    $rd_stats['collected'] = (float)$r_res['total_collected'];
+                    $rd_stats['pending'] = (float)$r_res['total_pending'];
+                }
+            }
+        } catch (Throwable $e) {
+            // Safe fallback to 0
+        }
+
+        $row['loan_stats'] = $loan_stats;
+        $row['rd_stats'] = $rd_stats;
+
         $agents[] = $row;
     }
+
+    if ($stmt_loan_stats) $stmt_loan_stats->close();
+    if ($stmt_rd_stats) $stmt_rd_stats->close();
 }
 
 // Fetch list of active agents for reassignment dropdown
@@ -148,6 +225,8 @@ if ($ra_result && $ra_result->num_rows > 0) {
                                                     <th>Name & Username</th>
                                                     <th>Phone</th>
                                                     <th>Email</th>
+                                                    <th style="min-width: 180px;">Loan Summary</th>
+                                                    <th style="min-width: 180px;">RD Summary</th>
                                                     <th>Option</th>
                                                 </tr>
                                             </thead>
@@ -171,11 +250,53 @@ if ($ra_result && $ra_result->num_rows > 0) {
                                                         </td>
                                                         <td><?php echo htmlspecialchars($agent['phone']); ?></td>
                                                         <td><?php echo htmlspecialchars($agent['email']); ?></td>
+                                                        <td style="min-width: 180px;">
+                                                            <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 10px; font-size: 12.5px;">
+                                                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px dashed #ddd; padding-bottom: 4px;">
+                                                                    <span style="color: #555; font-weight: 500;">Total Loan:</span>
+                                                                    <span style="font-weight: 700; color: #333;">₹<?php echo number_format($agent['loan_stats']['total'] ?? 0, 2); ?></span>
+                                                                </div>
+                                                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                                                    <span style="color: #28a745; font-weight: 500;">Collected:</span>
+                                                                    <span style="font-weight: 700; color: #28a745;">₹<?php echo number_format($agent['loan_stats']['collected'] ?? 0, 2); ?></span>
+                                                                </div>
+                                                                <div style="display: flex; justify-content: space-between;">
+                                                                    <span style="color: #dc3545; font-weight: 500;">Pending:</span>
+                                                                    <span style="font-weight: 700; color: #dc3545;">₹<?php echo number_format($agent['loan_stats']['pending'] ?? 0, 2); ?></span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td style="min-width: 180px;">
+                                                            <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 10px; font-size: 12.5px;">
+                                                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px dashed #ddd; padding-bottom: 4px;">
+                                                                    <span style="color: #555; font-weight: 500;">Total RD:</span>
+                                                                    <span style="font-weight: 700; color: #333;">₹<?php echo number_format($agent['rd_stats']['total'] ?? 0, 2); ?></span>
+                                                                </div>
+                                                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                                                    <span style="color: #28a745; font-weight: 500;">Collected:</span>
+                                                                    <span style="font-weight: 700; color: #28a745;">₹<?php echo number_format($agent['rd_stats']['collected'] ?? 0, 2); ?></span>
+                                                                </div>
+                                                                <div style="display: flex; justify-content: space-between;">
+                                                                    <span style="color: #dc3545; font-weight: 500;">Pending:</span>
+                                                                    <span style="font-weight: 700; color: #dc3545;">₹<?php echo number_format($agent['rd_stats']['pending'] ?? 0, 2); ?></span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
                                                         <td>
                                                             <ul>
                                                                 <li>
-                                                                    <a href="agent-wallet.php?id=<?php echo $agent['id']; ?>">
+                                                                    <a href="agent-wallet.php?id=<?php echo $agent['id']; ?>" title="Agent Wallet">
                                                                         <i class="ri-wallet-3-line"></i>
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a href="all-loans.php?agent_id=<?php echo $agent['id']; ?>" title="View Agent Loans & Payment History">
+                                                                        <i class="ri-hand-coin-line text-primary"></i>
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a href="all-rds.php?agent_id=<?php echo $agent['id']; ?>" title="View Agent RDs & Payment History">
+                                                                        <i class="ri-safe-2-line text-success"></i>
                                                                     </a>
                                                                 </li>
                                                                 <li>
@@ -195,7 +316,7 @@ if ($ra_result && $ra_result->num_rows > 0) {
                                                 <?php endforeach; ?>
                                                 <?php if (empty($agents)) : ?>
                                                     <tr>
-                                                        <td colspan="5" class="text-center">No agents found.</td>
+                                                        <td colspan="7" class="text-center">No agents found.</td>
                                                     </tr>
                                                 <?php endif; ?>
                                             </tbody>
