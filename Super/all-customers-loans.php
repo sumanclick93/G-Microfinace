@@ -83,6 +83,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && isset($_P
             $_SESSION['message'] = "<div class='alert alert-info d-flex align-items-center'><i class='ri-refresh-line fs-4 me-2'></i> Customer restored to Active status.</div>";
         }
         $stmt_restore->close();
+    } elseif ($action === 'reset_customer_password') {
+        $new_password = $_POST['new_password'] ?? '';
+        $confirm_password = $_POST['confirm_password'] ?? '';
+
+        if (empty($new_password)) {
+            $_SESSION['message'] = "<div class='alert alert-danger'>Password cannot be empty.</div>";
+        } elseif (strlen($new_password) < 6) {
+            $_SESSION['message'] = "<div class='alert alert-danger'>Password must be at least 6 characters long.</div>";
+        } elseif ($new_password !== $confirm_password) {
+            $_SESSION['message'] = "<div class='alert alert-danger'>Passwords do not match.</div>";
+        } else {
+            $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+            $stmt_pw = $conn->prepare("UPDATE customers SET password = ? WHERE id = ?");
+            $stmt_pw->bind_param("si", $hashed_password, $customer_id);
+
+            if ($stmt_pw->execute()) {
+                $_SESSION['message'] = "<div class='alert alert-success d-flex align-items-center'><i class='ri-checkbox-circle-line fs-4 me-2'></i> Customer password updated successfully!</div>";
+            } else {
+                $_SESSION['message'] = "<div class='alert alert-danger'>Error updating password: " . htmlspecialchars($stmt_pw->error, ENT_QUOTES, 'UTF-8') . "</div>";
+            }
+            $stmt_pw->close();
+        }
+        header("Location: all-customers-loans.php");
+        exit();
     }
     
     header("Location: all-customers-loans.php");
@@ -764,6 +788,16 @@ while ($row = $rd_pay_res->fetch_assoc()) {
                                                                             <i class="ri-eye-line" style="font-size: 18px;"></i>
                                                                         </a>
                                                                     </li>
+                                                                    <li>
+                                                                        <a href="javascript:void(0)" class="reset-pass-btn" 
+                                                                            data-bs-toggle="modal" 
+                                                                            data-bs-target="#resetPasswordModal" 
+                                                                            data-id="<?php echo $customer['id']; ?>" 
+                                                                            data-name="<?php echo htmlspecialchars($customer['full_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                                            title="Reset Customer Password">
+                                                                            <i class="ri-key-2-line" style="color: #0d6efd; font-size: 18px;"></i>
+                                                                        </a>
+                                                                    </li>
                                                                     
                                                                     <?php if(isset($customer['status']) && strtolower($customer['status']) == 'pending'): ?>
                                                                         <li>
@@ -855,6 +889,36 @@ while ($row = $rd_pay_res->fetch_assoc()) {
         </div>
     </div>
 
+    <div class="modal fade theme-modal" id="resetPasswordModal" aria-hidden="true" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header d-block text-center">
+                    <h5 class="modal-title w-100"><i class="ri-lock-password-line me-1"></i> Reset Customer Password</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"><i class="fas fa-times"></i></button>
+                </div>
+                <form method="POST" action="all-customers-loans.php">
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="reset_customer_password">
+                        <input type="hidden" name="customer_id" id="resetCustomerId" value="">
+                        <p class="mb-3">Resetting login password for <strong id="resetCustomerName" class="text-primary">Customer</strong>:</p>
+                        <div class="mb-3 text-start">
+                            <label class="form-label font-weight-bold mb-1">New Password</label>
+                            <input type="password" name="new_password" class="form-control" placeholder="Enter new password" required minlength="6">
+                        </div>
+                        <div class="mb-3 text-start">
+                            <label class="form-label font-weight-bold mb-1">Confirm Password</label>
+                            <input type="password" name="confirm_password" class="form-control" placeholder="Confirm new password" required minlength="6">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-animation btn-md fw-bold btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-animation btn-md fw-bold btn-primary">Update Password</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
     $(document).ready(function() {
         // Pass the customer ID into the correct modal based on which button was clicked
@@ -867,6 +931,14 @@ while ($row = $rd_pay_res->fetch_assoc()) {
             } else if (targetModal === '#rejectModal') {
                 $('#rejectId').val(customerId);
             }
+        });
+
+        // Pass customer ID and name into resetPasswordModal
+        $(document).on('click', '.reset-pass-btn', function() {
+            var customerId = $(this).data('id');
+            var customerName = $(this).data('name');
+            $('#resetCustomerId').val(customerId);
+            $('#resetCustomerName').text(customerName);
         });
     });
     </script>

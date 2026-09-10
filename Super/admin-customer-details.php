@@ -41,6 +41,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['new_agent_id'])) {
     }
 }
 
+// 3b. Handle Password Reset Form Submission
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] === 'reset_password') {
+    $new_password = $_POST['new_password'] ?? '';
+    $confirm_password = $_POST['confirm_password'] ?? '';
+
+    if (empty($new_password)) {
+        $_SESSION['message'] = "<div class='alert alert-danger'>Password cannot be empty.</div>";
+    } elseif (strlen($new_password) < 6) {
+        $_SESSION['message'] = "<div class='alert alert-danger'>Password must be at least 6 characters long.</div>";
+    } elseif ($new_password !== $confirm_password) {
+        $_SESSION['message'] = "<div class='alert alert-danger'>Passwords do not match.</div>";
+    } else {
+        $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+        $stmt_pw = $conn->prepare("UPDATE customers SET password = ? WHERE id = ?");
+        $stmt_pw->bind_param("si", $hashed_password, $customer_id);
+
+        if ($stmt_pw->execute()) {
+            $_SESSION['message'] = "<div class='alert alert-success d-flex align-items-center'><i class='ri-checkbox-circle-line fs-4 me-2'></i> Customer password updated successfully!</div>";
+        } else {
+            $_SESSION['message'] = "<div class='alert alert-danger'>Error updating password: " . htmlspecialchars($stmt_pw->error, ENT_QUOTES, 'UTF-8') . "</div>";
+        }
+        $stmt_pw->close();
+    }
+    header("Location: admin-customer-details.php?id=" . $customer_id);
+    exit();
+}
+
 
 // 4. Fetch Customer Details and their Assigned Agent
 $customer = null;
@@ -148,6 +175,24 @@ if ($agent_result->num_rows > 0) {
                                             <?php endif; ?>
                                         </li>
                                     </ul>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-3"><i class="ri-lock-password-line me-1"></i> Reset Password</h5>
+                                    <form method="POST" action="admin-customer-details.php?id=<?php echo $customer_id; ?>">
+                                        <input type="hidden" name="action" value="reset_password">
+                                        <div class="mb-3">
+                                            <label class="form-label text-muted small">New Password</label>
+                                            <input type="password" name="new_password" class="form-control" placeholder="Enter new password" required minlength="6">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label text-muted small">Confirm Password</label>
+                                            <input type="password" name="confirm_password" class="form-control" placeholder="Confirm new password" required minlength="6">
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="ri-key-2-line me-1"></i> Update Password</button>
+                                    </form>
                                 </div>
                             </div>
                         </div>
