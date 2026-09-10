@@ -34,8 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount_paid'])) {
     if ($amount_paid > 0) {
         $conn->begin_transaction();
         try {
-            // Step A: Insert into the payments table
-            $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes) VALUES (?, ?, ?, ?, ?)";
+            // Step A: Insert into the payments table as approved by default for agent collections
+            $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'approved')";
             $stmt_payment = $conn->prepare($sql_payment);
             $stmt_payment->bind_param("idsis", $loan_id, $amount_paid, $payment_date, $agent_id, $payment_notes);
             $stmt_payment->execute();
@@ -153,16 +153,73 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">Loan Summary</h5>
                                     <ul class="list-group list-group-flush">
-                                        <li class="list-group-item d-flex justify-content-between"><strong>Status:</strong> <span class="badge bg-primary"><?php echo ucfirst($loan['status']); ?></span></li>
-                                        <li class="list-group-item d-flex justify-content-between"><strong>Customer:</strong> <?php echo htmlspecialchars($loan['full_name']); ?></li>
-                                        <li class="list-group-item d-flex justify-content-between"><strong>Principal Amount:</strong> ₹<?php echo number_format($loan['loan_amount'], 2); ?></li>
-                                        <li class="list-group-item d-flex justify-content-between"><strong>Total Repayable:</strong> ₹<?php echo number_format($loan['total_repayable_amount'], 2); ?></li>
-                                        <li class="list-group-item d-flex justify-content-between"><strong>Installment (EMI):</strong> ₹<?php echo number_format($loan['monthly_installment'], 2); ?></li>
-                                        <li class="list-group-item d-flex justify-content-between"><strong>Tenure (Total EMIs):</strong> <?php echo $loan['tenure'] . ' ' . ucfirst($loan['repayment_cycle']) . 's'; ?></li>
-                                        <li class="list-group-item d-flex justify-content-between"><strong>EMIs Paid:</strong> <span><strong><?php echo $paid_emis_count; ?></strong> of <?php echo $loan['tenure']; ?></span></li>
-                                    </ul>
-                                </div>
-                            </div>
+                                         <li class="list-group-item d-flex justify-content-between align-items-center">
+                                             <strong>Loan Category:</strong>
+                                             <?php
+                                                 $l_type = $loan['loan_type'] ?? 'standard';
+                                                 if ($l_type === 'gold') {
+                                                     echo '<span class="badge bg-warning text-dark"><i class="ri-gold-line me-1"></i>Gold Loan</span>';
+                                                 } elseif ($l_type === 'interest_only') {
+                                                     echo '<span class="badge bg-primary">Interest-Only Loan</span>';
+                                                 } else {
+                                                     echo '<span class="badge bg-info">Standard Loan</span>';
+                                                 }
+                                             ?>
+                                         </li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Status:</strong> <span class="badge bg-primary"><?php echo ucfirst($loan['status']); ?></span></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Customer:</strong> <?php echo htmlspecialchars($loan['full_name']); ?></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Principal Amount:</strong> ₹<?php echo number_format($loan['loan_amount'], 2); ?></li>
+                                         <?php if (!empty($loan['processing_fee']) && floatval($loan['processing_fee']) > 0): ?>
+                                             <li class="list-group-item d-flex justify-content-between"><strong>Processing Fee:</strong> ₹<?php echo number_format($loan['processing_fee'], 2); ?></li>
+                                         <?php endif; ?>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Total Repayable:</strong> ₹<?php echo number_format($loan['total_repayable_amount'], 2); ?></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Installment:</strong> ₹<?php echo number_format($loan['monthly_installment'], 2); ?> <?php if(($loan['interest_calculation_type'] ?? '') === 'monthly_interest_only') echo '<small class="text-muted">(Interest Only)</small>'; ?></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Tenure (Total EMIs):</strong> <?php echo $loan['tenure'] . ' ' . ucfirst($loan['repayment_cycle']) . 's'; ?></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>EMIs Paid:</strong> <span><strong><?php echo $paid_emis_count; ?></strong> of <?php echo $loan['tenure']; ?></span></li>
+                                     </ul>
+                                 </div>
+                             </div>
+
+                             <?php if (($loan['loan_type'] ?? '') === 'gold'): ?>
+                             <div class="card border-warning">
+                                 <div class="card-body">
+                                     <h5 class="card-title mb-3 text-warning"><i class="ri-gold-line me-1"></i> Gold Collateral Details</h5>
+                                     <ul class="list-group list-group-flush">
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Gold Weight:</strong> <span><?php echo floatval($loan['gold_weight_grams']); ?> Grams</span></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Applied Gold Rate:</strong> <span>₹<?php echo number_format($loan['gold_rate_per_gram'], 2); ?>/g</span></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Gold Valuation:</strong> <strong class="text-success">₹<?php echo number_format(floatval($loan['gold_weight_grams']) * floatval($loan['gold_rate_per_gram']), 2); ?></strong></li>
+                                         <li class="list-group-item d-flex justify-content-between align-items-center">
+                                             <strong>Gold Item Photo:</strong>
+                                             <?php if (!empty($loan['gold_photo_path'])): ?>
+                                                 <?php
+                                                     $agent_g_img = $loan['gold_photo_path'];
+                                                     if (strpos($agent_g_img, 'Agents/') === 0) {
+                                                         $agent_g_img = substr($agent_g_img, 7);
+                                                     }
+                                                     if (!file_exists(__DIR__ . '/' . $agent_g_img)) {
+                                                         if (strpos($agent_g_img, 'upload/') === 0) {
+                                                             $alt_img = 'uploads/' . substr($agent_g_img, 7);
+                                                             if (file_exists(__DIR__ . '/' . $alt_img)) $agent_g_img = $alt_img;
+                                                         } elseif (strpos($agent_g_img, 'uploads/') === 0) {
+                                                             $alt_img = 'upload/' . substr($agent_g_img, 8);
+                                                             if (file_exists(__DIR__ . '/' . $alt_img)) $agent_g_img = $alt_img;
+                                                         }
+                                                     }
+                                                 ?>
+                                                 <a href="<?php echo htmlspecialchars($agent_g_img); ?>" target="_blank" class="btn btn-sm btn-warning">View Photo</a>
+                                             <?php else: ?>
+                                                 <span class="text-muted">No Photo Uploaded</span>
+                                             <?php endif; ?>
+                                         </li>
+                                     </ul>
+                                     <?php if (!empty($loan['gold_photo_path'])): ?>
+                                         <div class="mt-3 text-center">
+                                             <img src="<?php echo htmlspecialchars($agent_g_img); ?>" alt="Gold Collateral" class="img-fluid rounded border" style="max-height: 180px;">
+                                         </div>
+                                     <?php endif; ?>
+                                 </div>
+                             </div>
+                             <?php endif; ?>
                             
                             <div class="card">
                                 <div class="card-body">

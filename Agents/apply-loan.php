@@ -13,6 +13,10 @@ if (!isset($_SESSION['agent_id'])) {
 $agent_id = $_SESSION['agent_id'];
 $message = '';
 
+// Fetch system settings
+$gold_rate_per_gram = (float)get_system_setting($conn, 'gold_rate_per_gram', '5500.00');
+$processing_fee_percent = (float)get_system_setting($conn, 'gold_loan_processing_fee_percent', '1.50');
+
 // --- Fetch Agent's Current Wallet Balance ---
 $agent_wallet_balance = 0;
 $wallet_stmt = $conn->prepare("SELECT balance FROM agent_wallets WHERE agent_id = ?");
@@ -20,7 +24,7 @@ $wallet_stmt->bind_param("i", $agent_id);
 $wallet_stmt->execute();
 $wallet_result = $wallet_stmt->get_result();
 if ($wallet_result->num_rows > 0) {
-    $agent_wallet_balance = $wallet_result->fetch_assoc()['balance'];
+    $agent_wallet_balance = (float)$wallet_result->fetch_assoc()['balance'];
 }
 $wallet_stmt->close();
 
@@ -56,24 +60,87 @@ if (isset($_GET['customer_id']) && is_numeric($_GET['customer_id'])) {
 // 3. Handle Form Submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $customer_id_for_loan = (int)$_POST['customer_id'];
+    $loan_type = $_POST['loan_type'] ?? 'standard';
     $loan_amount = (float)$_POST['loan_amount'];
     $interest_rate = (float)$_POST['interest_rate'];
     $tenure = (int)$_POST['tenure'];
-    $repayment_cycle = $_POST['repayment_cycle'];
+    $repayment_cycle = $_POST['repayment_cycle'] ?? 'monthly';
     $total_repayable = (float)$_POST['total_repayable_amount'];
     $monthly_installment = (float)$_POST['monthly_installment'];
     $start_date = isset($_POST['start_date']) ? $_POST['start_date'] : date('Y-m-d');
 
+    $interest_calculation_type = ($loan_type === 'interest_only') ? 'monthly_interest_only' : 'flat_total';
+    
+    $gold_weight_grams = null;
+    $gold_photo_path = null;
+    $gold_rate_applied = null;
+    $processing_fee = 0.00;
+
+    if ($loan_type === 'gold') {
+        $gold_weight_grams = isset($_POST['gold_weight_grams']) ? (float)$_POST['gold_weight_grams'] : 0;
+        $gold_rate_applied = $gold_rate_per_gram;
+        $processing_fee = round(($loan_amount * $processing_fee_percent) / 100, 2);
+
+        // Handle Gold Collateral Photo Upload
+        if (isset($_FILES['gold_photo']) && $_FILES['gold_photo']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['gold_photo']['name'], PATHINFO_EXTENSION));
+            $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'];
+            if (in_array($ext, $allowed_exts)) {
+                $target_dir = __DIR__ . '/upload/gold_collateral/';
+                if (!is_dir($target_dir)) {
+                    @mkdir($target_dir, 0777, true);
+                }
+                
+                $target_dir_alt = __DIR__ . '/uploads/gold_collateral/';
+                if (!is_dir($target_dir_alt)) {
+                    @mkdir($target_dir_alt, 0777, true);
+                }
+
+                $new_filename = 'gold_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+                $destination = $target_dir . $new_filename;
+
+                if (move_uploaded_file($_FILES['gold_photo']['tmp_name'], $destination)) {
+                    @copy($destination, $target_dir_alt . $new_filename);
+                    $gold_photo_path = 'upload/gold_collateral/' . $new_filename;
+                } else {
+                    $message = "<div class='alert alert-danger'>Failed to save gold collateral photo. Please verify directory write permissions for " . htmlspecialchars($target_dir) . "</div>";
+                }
+            } else {
+                $message = "<div class='alert alert-danger'>Invalid image format (.$ext). Only JPG, JPEG, PNG, WEBP allowed.</div>";
+            }
+        } elseif (isset($_FILES['gold_photo']['error']) && $_FILES['gold_photo']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $err_code = $_FILES['gold_photo']['error'];
+            $message = "<div class='alert alert-danger'>File upload failed with error code: $err_code. Image file may exceed server upload limits.</div>";
+        }
+    }
+
     // Server-Side Wallet Balance Validation
     if ($loan_amount > $agent_wallet_balance) {
         $message = "<div class='alert alert-danger'>Loan amount cannot exceed your wallet balance of ₹" . number_format($agent_wallet_balance, 2) . ".</div>";
-    }
-    elseif ($customer_id_for_loan <= 0 || $loan_amount <= 0 || $tenure <= 0 || empty($start_date)) {
+    } elseif ($customer_id_for_loan <= 0 || $loan_amount <= 0 || $tenure <= 0 || empty($start_date)) {
         $message = "<div class='alert alert-danger'>Please fill in all required fields correctly.</div>";
+    } elseif ($loan_type === 'gold' && ($gold_weight_grams <= 0 || empty($gold_photo_path))) {
+        if (empty($message)) {
+            $message = "<div class='alert alert-danger'>Please provide valid Gold Weight and upload Gold Item Photo.</div>";
+        }
     } else {
-        $sql = "INSERT INTO loans (customer_id, agent_id, loan_amount, interest_rate, tenure, repayment_cycle, total_repayable_amount, monthly_installment, status, application_date, approval_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)";
+        $sql = "INSERT INTO loans (
+                    customer_id, agent_id, loan_type, interest_calculation_type, 
+                    loan_amount, interest_rate, tenure, repayment_cycle, 
+                    total_repayable_amount, monthly_installment, gold_weight_grams, 
+                    gold_photo_path, gold_rate_per_gram, processing_fee, 
+                    status, application_date, approval_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)";
+        
         $stmt_insert = $conn->prepare($sql);
-        $stmt_insert->bind_param("iiddssddss", $customer_id_for_loan, $agent_id, $loan_amount, $interest_rate, $tenure, $repayment_cycle, $total_repayable, $monthly_installment, $logged_time, $start_date);
+        $stmt_insert->bind_param(
+            "iissddissddddsss",
+            $customer_id_for_loan, $agent_id, $loan_type, $interest_calculation_type,
+            $loan_amount, $interest_rate, $tenure, $repayment_cycle,
+            $total_repayable, $monthly_installment, $gold_weight_grams,
+            $gold_photo_path, $gold_rate_applied, $processing_fee,
+            $logged_time, $start_date
+        );
 
         if ($stmt_insert->execute()) {
             $_SESSION['message'] = "<div class='alert alert-success'>Loan application submitted successfully.</div>";
@@ -109,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     </div>
                                     <?php if (!empty($message)) echo $message; ?>
 
-                                    <form class="theme-form theme-form-2 mega-form" method="POST" action="apply-loan.php<?php if($customer_id_from_url) echo '?customer_id='.$customer_id_from_url; ?>">
+                                    <form class="theme-form theme-form-2 mega-form" method="POST" enctype="multipart/form-data" action="apply-loan.php<?php if($customer_id_from_url) echo '?customer_id='.$customer_id_from_url; ?>">
                                         <div class="row">
                                             <div class="mb-4">
                                                 <label class="form-label-title mb-2">Customer</label>
@@ -127,14 +194,45 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                             </div>
 
                                             <div class="mb-4">
+                                                <label class="form-label-title mb-2">Loan Category / Type</label>
+                                                <select class="form-select" id="loanTypeSelect" name="loan_type" required>
+                                                    <option value="standard" selected>Standard Loan (Principal + Flat Interest)</option>
+                                                    <option value="interest_only">Interest Loan (Monthly Interest Only, Principal at End)</option>
+                                                    <option value="gold">Gold Loan (Collateral Backed)</option>
+                                                </select>
+                                            </div>
+
+                                            <!-- Gold Loan Specific Section -->
+                                            <div id="goldLoanSection" class="p-3 mb-4 border border-warning rounded bg-light-warning" style="display: none;">
+                                                <h6 class="text-warning mb-3"><i class="ri-gold-line me-1"></i> Gold Collateral Information</h6>
+                                                <div class="row">
+                                                    <div class="col-md-6 mb-3">
+                                                        <label class="form-label-title mb-2">Gold Weight (Grams)</label>
+                                                        <input class="form-control" type="number" step="0.001" id="goldWeight" name="gold_weight_grams" placeholder="e.g., 10.5">
+                                                        <small class="form-text text-muted">Admin Gold Rate: ₹<?php echo number_format($gold_rate_per_gram, 2); ?>/g</small>
+                                                    </div>
+                                                    <div class="col-md-6 mb-3">
+                                                        <label class="form-label-title mb-2">Gold Valuation (₹)</label>
+                                                        <input class="form-control" type="text" id="goldValuation" readonly placeholder="Calculated valuation">
+                                                    </div>
+                                                    <div class="col-md-12 mb-3">
+                                                        <label class="form-label-title mb-2">Gold Item Photo</label>
+                                                        <input class="form-control" type="file" id="goldPhoto" name="gold_photo" accept="image/*">
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-4">
                                                 <label class="form-label-title mb-2">Loan Amount (Principal) (₹)</label>
                                                 <input class="form-control" type="number" step="100" id="loanAmount" name="loan_amount" placeholder="e.g., 10000" required>
                                                 <div id="walletError" class="text-danger mt-1" style="display: none;"></div>
+                                                <div id="goldValuationError" class="text-danger mt-1" style="display: none;"></div>
                                             </div>
 
                                             <div class="mb-4">
                                                 <label class="form-label-title mb-2">Loan Interest Rate (%)</label>
                                                 <input class="form-control" type="number" step="0.1" id="interestRate" name="interest_rate" placeholder="e.g., 5.5" required>
+                                                <small id="interestHelpText" class="form-text text-muted"></small>
                                             </div>
 
                                             <div class="mb-4">
@@ -162,13 +260,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                                             <hr>
 
-                                            <div class="col-md-6 mb-4">
+                                            <div class="col-md-4 mb-4" id="processingFeeCol" style="display: none;">
+                                                <label class="form-label-title mb-2">Processing Fee (<?php echo $processing_fee_percent; ?>%) (₹)</label>
+                                                <input class="form-control" type="number" id="processingFee" readonly>
+                                            </div>
+
+                                            <div class="col-md-4 mb-4">
                                                 <label class="form-label-title mb-2">Total Repayable Amount (₹)</label>
                                                 <input class="form-control" type="number" id="totalRepayable" name="total_repayable_amount" readonly>
                                             </div>
 
-                                            <div class="col-md-6 mb-4">
-                                                <label class="form-label-title mb-2">Installment Amount (₹)</label>
+                                            <div class="col-md-4 mb-4">
+                                                <label class="form-label-title mb-2" id="installmentLabel">Installment Amount (₹)</label>
                                                 <input class="form-control" type="number" id="installmentAmount" name="monthly_installment" readonly>
                                             </div>
 
@@ -189,44 +292,131 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const loanTypeSelect = document.getElementById('loanTypeSelect');
+            const goldLoanSection = document.getElementById('goldLoanSection');
+            const goldWeightInput = document.getElementById('goldWeight');
+            const goldValuationInput = document.getElementById('goldValuation');
+            const goldPhotoInput = document.getElementById('goldPhoto');
+            
             const loanAmountInput = document.getElementById('loanAmount');
             const interestRateInput = document.getElementById('interestRate');
             const tenureInput = document.getElementById('tenure');
             const totalRepayableInput = document.getElementById('totalRepayable');
             const installmentAmountInput = document.getElementById('installmentAmount');
+            const installmentLabel = document.getElementById('installmentLabel');
+            const interestHelpText = document.getElementById('interestHelpText');
+            
+            const processingFeeCol = document.getElementById('processingFeeCol');
+            const processingFeeInput = document.getElementById('processingFee');
+
             const walletBalance = <?php echo $agent_wallet_balance; ?>;
+            const adminGoldRate = <?php echo $gold_rate_per_gram; ?>;
+            const feePercent = <?php echo $processing_fee_percent; ?>;
+            
             const walletErrorDiv = document.getElementById('walletError');
+            const goldValuationErrorDiv = document.getElementById('goldValuationError');
             const submitButton = document.getElementById('submitButton');
 
+            function toggleLoanTypeView() {
+                const selectedType = loanTypeSelect.value;
+                if (selectedType === 'gold') {
+                    goldLoanSection.style.display = 'block';
+                    processingFeeCol.style.display = 'block';
+                    goldPhotoInput.required = true;
+                    goldWeightInput.required = true;
+                    installmentLabel.textContent = 'Installment Amount (₹)';
+                    interestHelpText.textContent = 'Gold loan interest calculated on flat/amortized basis.';
+                } else if (selectedType === 'interest_only') {
+                    goldLoanSection.style.display = 'none';
+                    processingFeeCol.style.display = 'none';
+                    goldPhotoInput.required = false;
+                    goldWeightInput.required = false;
+                    installmentLabel.textContent = 'Monthly Interest Payment (₹)';
+                    interestHelpText.textContent = 'Interest Loan: Customer pays monthly interest only. Principal is repayable at tenure end.';
+                } else {
+                    goldLoanSection.style.display = 'none';
+                    processingFeeCol.style.display = 'none';
+                    goldPhotoInput.required = false;
+                    goldWeightInput.required = false;
+                    installmentLabel.textContent = 'Installment Amount (₹)';
+                    interestHelpText.textContent = 'Standard loan amortization with flat total interest.';
+                }
+                performCalculations();
+            }
+
             function performCalculations() {
+                const selectedType = loanTypeSelect.value;
                 const principal = parseFloat(loanAmountInput.value);
                 const interest = parseFloat(interestRateInput.value);
                 const tenure = parseInt(tenureInput.value);
+                const weight = parseFloat(goldWeightInput.value);
 
-                if (!isNaN(principal) && principal > walletBalance) {
-                    walletErrorDiv.textContent = 'Loan amount exceeds your available wallet balance.';
-                    walletErrorDiv.style.display = 'block';
-                    submitButton.disabled = true;
+                // 1. Gold Valuation
+                let valuation = 0;
+                if (selectedType === 'gold' && !isNaN(weight) && weight > 0) {
+                    valuation = weight * adminGoldRate;
+                    goldValuationInput.value = '₹' + valuation.toFixed(2);
                 } else {
-                    walletErrorDiv.style.display = 'none';
-                    submitButton.disabled = false;
+                    goldValuationInput.value = '';
                 }
 
-                if (!isNaN(principal) && principal > 0 && !isNaN(interest) && interest >= 0 && !isNaN(tenure) && tenure > 0) {
-                    const totalRepayable = principal * (1 + (interest / 100));
-                    const installment = totalRepayable / tenure;
+                // 2. Validation Checks
+                let hasError = false;
 
-                    totalRepayableInput.value = totalRepayable.toFixed(2);
-                    installmentAmountInput.value = installment.toFixed(2);
+                if (!isNaN(principal) && principal > walletBalance) {
+                    walletErrorDiv.textContent = 'Loan amount exceeds your available wallet balance (₹' + walletBalance.toFixed(2) + ').';
+                    walletErrorDiv.style.display = 'block';
+                    hasError = true;
+                } else {
+                    walletErrorDiv.style.display = 'none';
+                }
+
+                if (selectedType === 'gold' && !isNaN(principal) && valuation > 0 && principal > valuation) {
+                    goldValuationErrorDiv.textContent = 'Loan amount cannot exceed gold valuation of ₹' + valuation.toFixed(2) + '.';
+                    goldValuationErrorDiv.style.display = 'block';
+                    hasError = true;
+                } else {
+                    goldValuationErrorDiv.style.display = 'none';
+                }
+
+                submitButton.disabled = hasError;
+
+                // 3. Financial Calculations
+                if (!isNaN(principal) && principal > 0 && !isNaN(interest) && interest >= 0 && !isNaN(tenure) && tenure > 0) {
+                    if (selectedType === 'interest_only') {
+                        // Monthly interest payment calculation
+                        const monthlyInterest = principal * (interest / 100);
+                        const totalRepayable = principal + (monthlyInterest * tenure);
+                        
+                        installmentAmountInput.value = monthlyInterest.toFixed(2);
+                        totalRepayableInput.value = totalRepayable.toFixed(2);
+                    } else {
+                        // Standard / Gold Loan Flat Total calculation
+                        const totalRepayable = principal * (1 + (interest / 100));
+                        const installment = totalRepayable / tenure;
+                        
+                        totalRepayableInput.value = totalRepayable.toFixed(2);
+                        installmentAmountInput.value = installment.toFixed(2);
+
+                        if (selectedType === 'gold') {
+                            const fee = (principal * feePercent) / 100;
+                            processingFeeInput.value = fee.toFixed(2);
+                        }
+                    }
                 } else {
                     totalRepayableInput.value = '';
                     installmentAmountInput.value = '';
+                    processingFeeInput.value = '';
                 }
             }
 
+            loanTypeSelect.addEventListener('change', toggleLoanTypeView);
+            goldWeightInput.addEventListener('input', performCalculations);
             loanAmountInput.addEventListener('input', performCalculations);
             interestRateInput.addEventListener('input', performCalculations);
             tenureInput.addEventListener('input', performCalculations);
+
+            toggleLoanTypeView();
         });
     </script>
 </body>

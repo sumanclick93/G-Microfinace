@@ -25,7 +25,9 @@ if (isset($_SESSION['customer_id'])) {
         $sql_loan = "SELECT
                         l.id, l.loan_amount, l.total_repayable_amount, l.monthly_installment,
                         l.interest_rate, l.tenure, l.repayment_cycle, l.status,
-                        l.application_date, l.approval_date, l.notes as admin_notes
+                        l.application_date, l.approval_date, l.notes as admin_notes,
+                        l.loan_type, l.interest_calculation_type, l.gold_weight_grams,
+                        l.gold_photo_path, l.gold_rate_per_gram, l.processing_fee
                     FROM loans l
                     WHERE l.id = ? AND l.customer_id = ?";
 
@@ -79,13 +81,45 @@ if (isset($_SESSION['customer_id'])) {
                     // --- 5. Calculate Remaining Balance ---
                     $remaining_balance = max(0, (float)$loan_details['total_repayable_amount'] - $total_paid);
 
+                    $gold_weight = !is_null($loan_details['gold_weight_grams']) ? (float)$loan_details['gold_weight_grams'] : null;
+                    $gold_rate = !is_null($loan_details['gold_rate_per_gram']) ? (float)$loan_details['gold_rate_per_gram'] : null;
+                    $gold_valuation = (!empty($gold_weight) && !empty($gold_rate)) ? round($gold_weight * $gold_rate, 2) : null;
+                    $raw_dt_photo = $loan_details['gold_photo_path'] ?? '';
+                    if (!empty($raw_dt_photo)) {
+                        if (strpos($raw_dt_photo, 'http') === 0) {
+                            $gold_photo_url = $raw_dt_photo;
+                        } else {
+                            $rel_dt = (strpos($raw_dt_photo, 'Agents/') === 0) ? $raw_dt_photo : 'Agents/' . ltrim($raw_dt_photo, '/');
+                            $gold_photo_url = $rel_dt;
+                            $disk_dt = __DIR__ . '/../../' . $rel_dt;
+                            if (!file_exists($disk_dt)) {
+                                if (strpos($rel_dt, 'Agents/upload/') === 0) {
+                                    $alt_dt = 'Agents/uploads/' . substr($rel_dt, 14);
+                                    if (file_exists(__DIR__ . '/../../' . $alt_dt)) $gold_photo_url = $alt_dt;
+                                } elseif (strpos($rel_dt, 'Agents/uploads/') === 0) {
+                                    $alt_dt = 'Agents/upload/' . substr($rel_dt, 15);
+                                    if (file_exists(__DIR__ . '/../../' . $alt_dt)) $gold_photo_url = $alt_dt;
+                                }
+                            }
+                        }
+                    } else {
+                        $gold_photo_url = null;
+                    }
+
                     // --- 6. Format Success Response ---
                     $response['status'] = 'success';
                     $response['data'] = [
                         'id' => $loan_details['id'],
+                        'loan_type' => $loan_details['loan_type'] ?? 'standard',
+                        'interest_calculation_type' => $loan_details['interest_calculation_type'] ?? 'flat_total',
                         'loan_amount' => (float)$loan_details['loan_amount'],
                         'total_repayable_amount' => (float)$loan_details['total_repayable_amount'],
                         'monthly_installment' => (float)$loan_details['monthly_installment'],
+                        'processing_fee' => (float)$loan_details['processing_fee'],
+                        'gold_weight_grams' => $gold_weight,
+                        'gold_rate_per_gram' => $gold_rate,
+                        'gold_valuation' => $gold_valuation,
+                        'gold_photo_url' => $gold_photo_url,
                         'interest_rate' => (float)$loan_details['interest_rate'],
                         'tenure_description' => $loan_details['tenure'] . ' ' . ucfirst($loan_details['repayment_cycle']) . ' Payments',
                         'status' => $loan_details['status'],
@@ -99,7 +133,7 @@ if (isset($_SESSION['customer_id'])) {
                         'total_emi' => (int)$loan_details['tenure'],
                         'no_of_paid_emi' => $no_of_paid_emi,
 
-                        // Includes the new status and proof_url for each transaction
+                        // Includes the status and proof_url for each transaction
                         'payments' => $payments
                     ];
                     unset($response['message']);

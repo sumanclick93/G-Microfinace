@@ -43,6 +43,12 @@ if (isset($_SESSION['customer_id'])) {
                 l.application_date,
                 l.tenure,
                 l.repayment_cycle,
+                l.loan_type,
+                l.interest_calculation_type,
+                l.gold_weight_grams,
+                l.gold_photo_path,
+                l.gold_rate_per_gram,
+                l.processing_fee,
                 COUNT(p.id) AS no_of_paid_emi
             FROM loans l
             LEFT JOIN payments p ON l.id = p.loan_id
@@ -63,7 +69,7 @@ if (isset($_SESSION['customer_id'])) {
 
     $stmt->bind_param("i", $customer_id);
 
-    // --- 4. Execute and Fetch Data (MODIFIED) ---
+    // --- 4. Execute and Fetch Data ---
     $loans = [];
     if ($stmt->execute()) {
         $result = $stmt->get_result();
@@ -71,16 +77,50 @@ if (isset($_SESSION['customer_id'])) {
             // Format data
             $row['loan_amount'] = (float)$row['loan_amount'];
             $row['total_repayable_amount'] = (float)$row['total_repayable_amount'];
-            
-            // Add the new keys as requested
+            $row['loan_type'] = $row['loan_type'] ?? 'standard';
+            $row['interest_calculation_type'] = $row['interest_calculation_type'] ?? 'flat_total';
+            $row['gold_weight_grams'] = !is_null($row['gold_weight_grams']) ? (float)$row['gold_weight_grams'] : null;
+            $row['gold_rate_per_gram'] = !is_null($row['gold_rate_per_gram']) ? (float)$row['gold_rate_per_gram'] : null;
+            $row['processing_fee'] = (float)$row['processing_fee'];
+
+            if (!empty($row['gold_weight_grams']) && !empty($row['gold_rate_per_gram'])) {
+                $row['gold_valuation'] = round($row['gold_weight_grams'] * $row['gold_rate_per_gram'], 2);
+            } else {
+                $row['gold_valuation'] = null;
+            }
+
+            $raw_api_photo = $row['gold_photo_path'] ?? '';
+            if (!empty($raw_api_photo)) {
+                if (strpos($raw_api_photo, 'http') === 0) {
+                    $row['gold_photo_url'] = $raw_api_photo;
+                } else {
+                    $rel_api = (strpos($raw_api_photo, 'Agents/') === 0) ? $raw_api_photo : 'Agents/' . ltrim($raw_api_photo, '/');
+                    $row['gold_photo_url'] = $rel_api;
+                    $disk_p = __DIR__ . '/../../' . $rel_api;
+                    if (!file_exists($disk_p)) {
+                        if (strpos($rel_api, 'Agents/upload/') === 0) {
+                            $alt_api = 'Agents/uploads/' . substr($rel_api, 14);
+                            if (file_exists(__DIR__ . '/../../' . $alt_api)) $row['gold_photo_url'] = $alt_api;
+                        } elseif (strpos($rel_api, 'Agents/uploads/') === 0) {
+                            $alt_api = 'Agents/upload/' . substr($rel_api, 15);
+                            if (file_exists(__DIR__ . '/../../' . $alt_api)) $row['gold_photo_url'] = $alt_api;
+                        }
+                    }
+                }
+            } else {
+                $row['gold_photo_url'] = null;
+            }
+            unset($row['gold_photo_path']);
+
+            // Add keys
             $row['total_emi'] = (int)$row['tenure'];
             $row['no_of_paid_emi'] = (int)$row['no_of_paid_emi'];
             
-            // Re-add tenure_description
+            // Tenure description
             if (isset($row['tenure']) && isset($row['repayment_cycle'])) {
                  $row['tenure_description'] = $row['tenure'] . ' ' . ucfirst($row['repayment_cycle']) . ' Payments';
             } else {
-                  $row['tenure_description'] = 'N/A';
+                 $row['tenure_description'] = 'N/A';
             }
 
             // Clean up original columns

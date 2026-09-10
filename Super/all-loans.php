@@ -84,6 +84,7 @@ $filter_agent_id = $_GET['agent_id'] ?? '';
 // --- 4. Build the dynamic SQL query based on filters ---
 $sql = "SELECT 
             l.id, l.loan_amount, l.total_repayable_amount, l.status, l.application_date, l.tenure,
+            l.loan_type, l.gold_weight_grams, l.processing_fee,
             c.full_name as customer_name, c.avatar as customer_avatar,
             a.first_name as agent_first_name, a.last_name as agent_last_name,
             IFNULL(p.paid_emis, 0) as paid_emis
@@ -207,22 +208,34 @@ $stmt->close();
                                     <div class="table-responsive table-product">
                                         <table class="table all-package theme-table" id="table_id">
                                              <thead>
-                                                 <tr><th>Photo</th><th>Customer Name</th><th>Agent Name</th><th>Loan Amount</th><th>EMIs (Paid/Total)</th><th>Application Date</th><th>Status</th><th>Details</th></tr>
+                                                 <tr><th>Photo</th><th>Customer Name</th><th>Type</th><th>Agent Name</th><th>Loan Amount</th><th>EMIs (Paid/Total)</th><th>Application Date</th><th>Status</th><th>Details</th></tr>
                                              </thead>
                                              <tbody>
                                                  <?php if (empty($loans)) : ?>
-                                                     <tr><td colspan="8" class="text-center text-muted">No loans found matching your criteria.</td></tr>
+                                                     <tr><td colspan="9" class="text-center text-muted">No loans found matching your criteria.</td></tr>
                                                  <?php else : ?>
-                                                    <?php foreach ($loans as $loan) : ?>
-                                                        <tr>
-                                                            <td>
-                                                                <div class="table-image">
-                                                                    <?php $avatar_path = !empty($loan['customer_avatar']) ? '../Agents/upload/customers/avatars/' . $loan['customer_avatar'] : 'assets/images/users/default-avatar.png'; ?>
-                                                                    <img src="<?php echo htmlspecialchars($avatar_path); ?>" class="img-fluid" alt="Avatar" style="max-width: 40px; border-radius: 5px;">
-                                                                </div>
-                                                            </td>
-                                                            <td><?php echo htmlspecialchars($loan['customer_name']); ?></td>
-                                                            <td><?php echo htmlspecialchars($loan['agent_first_name'] . ' ' . $loan['agent_last_name']); ?></td>
+                                                     <?php foreach ($loans as $loan) : ?>
+                                                         <tr>
+                                                             <td>
+                                                                 <div class="table-image">
+                                                                     <?php $avatar_path = !empty($loan['customer_avatar']) ? '../Agents/upload/customers/avatars/' . $loan['customer_avatar'] : 'assets/images/users/default-avatar.png'; ?>
+                                                                     <img src="<?php echo htmlspecialchars($avatar_path); ?>" class="img-fluid" alt="Avatar" style="max-width: 40px; border-radius: 5px;">
+                                                                 </div>
+                                                             </td>
+                                                             <td><?php echo htmlspecialchars($loan['customer_name']); ?></td>
+                                                             <td>
+                                                                 <?php
+                                                                     $l_type = $loan['loan_type'] ?? 'standard';
+                                                                     if ($l_type === 'gold') {
+                                                                         echo '<span class="badge bg-warning text-dark"><i class="ri-gold-line me-1"></i>Gold (' . floatval($loan['gold_weight_grams']) . 'g)</span>';
+                                                                     } elseif ($l_type === 'interest_only') {
+                                                                         echo '<span class="badge bg-primary">Interest Loan</span>';
+                                                                     } else {
+                                                                         echo '<span class="badge bg-info">Standard</span>';
+                                                                     }
+                                                                 ?>
+                                                             </td>
+                                                             <td><?php echo htmlspecialchars($loan['agent_first_name'] . ' ' . $loan['agent_last_name']); ?></td>
                                                              <td>₹<?php echo number_format($loan['loan_amount']); ?></td>
                                                              <td><strong><?php
                                                                 $status_clean = strtolower(trim($loan['status']));

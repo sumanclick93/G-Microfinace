@@ -30,4 +30,34 @@ if ($conn->connect_error) {
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
+if (!function_exists('get_system_setting')) {
+    function get_system_setting($conn, $key, $default = '') {
+        $stmt = $conn->prepare("SELECT setting_value FROM system_settings WHERE setting_key = ?");
+        if ($stmt) {
+            $stmt->bind_param("s", $key);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && $row = $res->fetch_assoc()) {
+                $stmt->close();
+                return $row['setting_value'];
+            }
+            $stmt->close();
+        }
+        return $default;
+    }
+}
+
+if (!function_exists('set_system_setting')) {
+    function set_system_setting($conn, $key, $value) {
+        $stmt = $conn->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        if ($stmt) {
+            $stmt->bind_param("ss", $key, $value);
+            $success = $stmt->execute();
+            $stmt->close();
+            return $success;
+        }
+        return false;
+    }
+}
 ?>

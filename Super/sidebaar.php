@@ -102,9 +102,15 @@
                         </a>
                     </li>
                     <li class="sidebar-list-item">
+                        <a class="sidebar-link" href="settings.php">
+                            <i data-feather="sliders"></i>
+                            <span>System Settings</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-list-item">
                         <a class="sidebar-link" href="profile-setting.php">
                             <i data-feather="settings"></i>
-                            <span>Settings</span>
+                            <span>Profile Settings</span>
                         </a>
                     </li>
         
