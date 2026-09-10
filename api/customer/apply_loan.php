@@ -82,33 +82,84 @@ if (isset($_SESSION['customer_id'])) {
                 exit();
             }
 
-            if (isset($_FILES['gold_photo']) && $_FILES['gold_photo']['error'] === UPLOAD_ERR_OK) {
-                $ext = strtolower(pathinfo($_FILES['gold_photo']['name'], PATHINFO_EXTENSION));
-                $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'];
-                if (in_array($ext, $allowed_exts)) {
-                    $upload_dir = '../../Agents/upload/gold_collateral/';
-                    if (!is_dir($upload_dir)) {
-                        mkdir($upload_dir, 0777, true);
+            $file_items = [];
+            foreach (['gold_photo', 'gold_photo_path', 'gold_photo_file'] as $f_key) {
+                if (isset($_FILES[$f_key])) {
+                    $f_obj = $_FILES[$f_key];
+                    if (is_array($f_obj['name'])) {
+                        foreach ($f_obj['name'] as $idx => $fname) {
+                            if (!empty($fname)) {
+                                $file_items[] = [
+                                    'name' => $f_obj['name'][$idx],
+                                    'tmp_name' => $f_obj['tmp_name'][$idx],
+                                    'error' => $f_obj['error'][$idx],
+                                ];
+                            }
+                        }
+                    } elseif (!empty($f_obj['name'])) {
+                        $file_items[] = [
+                            'name' => $f_obj['name'],
+                            'tmp_name' => $f_obj['tmp_name'],
+                            'error' => $f_obj['error'],
+                        ];
                     }
-                    $new_filename = 'gold_api_' . time() . '_' . rand(1000,9999) . '.' . $ext;
-                    $destination = $upload_dir . $new_filename;
-
-                    if (move_uploaded_file($_FILES['gold_photo']['tmp_name'], $destination)) {
-                        $gold_photo_path = 'upload/gold_collateral/' . $new_filename;
-                    } else {
-                        http_response_code(500);
-                        echo json_encode(['status' => 'error', 'message' => 'Failed to save gold item photo to server folder.']);
-                        exit();
-                    }
-                } else {
-                    http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'Invalid gold photo format (.' . $ext . '). Please upload JPG, PNG, or WEBP.']);
-                    exit();
                 }
+            }
+
+            $uploaded_photos = [];
+            $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'];
+            $candidate_dirs = [
+                __DIR__ . '/../../Agents/upload/gold_collateral/',
+                __DIR__ . '/../../Agents/uploads/gold_collateral/',
+                __DIR__ . '/../../Agents/upload/',
+                __DIR__ . '/../../Agents/uploads/'
+            ];
+
+            foreach ($file_items as $item) {
+                if ($item['error'] === UPLOAD_ERR_OK) {
+                    $ext = strtolower(pathinfo($item['name'], PATHINFO_EXTENSION));
+                    if (in_array($ext, $allowed_exts)) {
+                        $new_filename = 'gold_api_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+                        $saved_rel = null;
+                        $saved_abs = null;
+
+                        foreach ($candidate_dirs as $cdir) {
+                            if (!is_dir($cdir)) @mkdir($cdir, 0755, true);
+                            @chmod($cdir, 0755);
+                            $dest = $cdir . $new_filename;
+                            if (move_uploaded_file($item['tmp_name'], $dest)) {
+                                $saved_abs = $dest;
+                                if (strpos($cdir, 'upload/gold_collateral') !== false) {
+                                    $saved_rel = 'upload/gold_collateral/' . $new_filename;
+                                } elseif (strpos($cdir, 'uploads/gold_collateral') !== false) {
+                                    $saved_rel = 'uploads/gold_collateral/' . $new_filename;
+                                } elseif (strpos($cdir, 'upload/') !== false) {
+                                    $saved_rel = 'upload/' . $new_filename;
+                                } else {
+                                    $saved_rel = 'uploads/' . $new_filename;
+                                }
+                                break;
+                            }
+                        }
+
+                        if ($saved_abs && $saved_rel) {
+                            foreach ($candidate_dirs as $alt_cdir) {
+                                if (!is_dir($alt_cdir)) @mkdir($alt_cdir, 0755, true);
+                                @chmod($alt_cdir, 0755);
+                                $alt_dest = $alt_cdir . $new_filename;
+                                if (!file_exists($alt_dest)) @copy($saved_abs, $alt_dest);
+                            }
+                            $uploaded_photos[] = $saved_rel;
+                        }
+                    }
+                }
+            }
+
+            if (!empty($uploaded_photos)) {
+                $gold_photo_path = implode(',', $uploaded_photos);
             } else {
-                $err_code = $_FILES['gold_photo']['error'] ?? 'NO_FILE';
                 http_response_code(400);
-                echo json_encode(['status' => 'error', 'message' => 'Gold collateral photo upload is required (Error code: ' . $err_code . ').']);
+                echo json_encode(['status' => 'error', 'message' => 'Gold collateral photo upload is required.']);
                 exit();
             }
         }
@@ -141,7 +192,7 @@ if (isset($_SESSION['customer_id'])) {
 
         $stmt = $conn->prepare($sql);
         $stmt->bind_param(
-            "iissddissddddsss",
+            "iissddissddsddss",
             $customer_id, $agent_id, $loan_type, $interest_calculation_type,
             $loan_amount, $interest_rate, $tenure, $repayment_cycle,
             $total_repayable_amount, $monthly_installment, $gold_weight_grams,

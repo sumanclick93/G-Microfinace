@@ -70,6 +70,126 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount_paid'])) {
     }
 }
 
+// --- Handle Upload / Update Gold Collateral Photo ---
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] === 'upload_gold_photo') {
+    if (isset($_FILES['gold_photo'])) {
+        $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'];
+        $target_dir = __DIR__ . '/upload/gold_collateral/';
+        if (!is_dir($target_dir)) @mkdir($target_dir, 0755, true);
+        @chmod($target_dir, 0755);
+        $target_dir_alt = __DIR__ . '/uploads/gold_collateral/';
+        if (!is_dir($target_dir_alt)) @mkdir($target_dir_alt, 0755, true);
+        @chmod($target_dir_alt, 0755);
+
+        // Fetch existing photos to append
+        $stmt_curr = $conn->prepare("SELECT gold_photo_path FROM loans WHERE id = ? AND agent_id = ?");
+        $stmt_curr->bind_param("ii", $loan_id, $agent_id);
+        $stmt_curr->execute();
+        $res_curr = $stmt_curr->get_result();
+        $existing_str = ($res_curr->num_rows > 0) ? ($res_curr->fetch_assoc()['gold_photo_path'] ?? '') : '';
+        $stmt_curr->close();
+
+        $existing_photos = !empty($existing_str) ? array_filter(explode(',', $existing_str)) : [];
+
+        $files_obj = $_FILES['gold_photo'];
+        $file_items = [];
+        if (is_array($files_obj['name'])) {
+            foreach ($files_obj['name'] as $idx => $n) {
+                if (!empty($n)) {
+                    $file_items[] = [
+                        'name' => $files_obj['name'][$idx],
+                        'tmp_name' => $files_obj['tmp_name'][$idx],
+                        'error' => $files_obj['error'][$idx],
+                    ];
+                }
+            }
+        } else {
+            if (!empty($files_obj['name'])) {
+                $file_items[] = [
+                    'name' => $files_obj['name'],
+                    'tmp_name' => $files_obj['tmp_name'],
+                    'error' => $files_obj['error'],
+                ];
+            }
+        }
+
+        $new_uploaded = [];
+        $upload_errors = [];
+
+        $candidate_dirs = [
+            __DIR__ . '/upload/gold_collateral/',
+            __DIR__ . '/uploads/gold_collateral/',
+            __DIR__ . '/upload/',
+            __DIR__ . '/uploads/'
+        ];
+
+        foreach ($file_items as $item) {
+            if ($item['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($item['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, $allowed_exts)) {
+                    $new_filename = 'gold_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+                    $saved_rel = null;
+                    $saved_abs = null;
+
+                    foreach ($candidate_dirs as $cdir) {
+                        if (!is_dir($cdir)) @mkdir($cdir, 0755, true);
+                        @chmod($cdir, 0755);
+                        $dest = $cdir . $new_filename;
+                        if (move_uploaded_file($item['tmp_name'], $dest)) {
+                            $saved_abs = $dest;
+                            if (strpos($cdir, 'upload/gold_collateral') !== false) {
+                                $saved_rel = 'upload/gold_collateral/' . $new_filename;
+                            } elseif (strpos($cdir, 'uploads/gold_collateral') !== false) {
+                                $saved_rel = 'uploads/gold_collateral/' . $new_filename;
+                            } elseif (strpos($cdir, 'upload/') !== false) {
+                                $saved_rel = 'upload/' . $new_filename;
+                            } else {
+                                $saved_rel = 'uploads/' . $new_filename;
+                            }
+                            break;
+                        }
+                    }
+
+                    if ($saved_abs && $saved_rel) {
+                        foreach ($candidate_dirs as $alt_cdir) {
+                            if (!is_dir($alt_cdir)) @mkdir($alt_cdir, 0755, true);
+                            @chmod($alt_cdir, 0755);
+                            $alt_dest = $alt_cdir . $new_filename;
+                            if (!file_exists($alt_dest)) @copy($saved_abs, $alt_dest);
+                        }
+                        $new_uploaded[] = $saved_rel;
+                    } else {
+                        $upload_errors[] = htmlspecialchars($item['name']) . ': Server folder permission issue.';
+                    }
+                } else {
+                    $upload_errors[] = htmlspecialchars($item['name']) . ": Invalid image format (.$ext).";
+                }
+            } else {
+                $err_code = $item['error'];
+                $err_desc = ($err_code == 1 || $err_code == 2) ? 'Exceeds max file size limit' : "Error code $err_code";
+                $upload_errors[] = htmlspecialchars($item['name']) . ": $err_desc.";
+            }
+        }
+
+        if (!empty($new_uploaded)) {
+            $all_photos = array_merge($existing_photos, $new_uploaded);
+            $final_path_str = implode(',', array_unique(array_filter($all_photos)));
+
+            $stmt_up = $conn->prepare("UPDATE loans SET gold_photo_path = ? WHERE id = ? AND agent_id = ?");
+            $stmt_up->bind_param("sii", $final_path_str, $loan_id, $agent_id);
+            $stmt_up->execute();
+            $stmt_up->close();
+
+            $_SESSION['message'] = "<div class='alert alert-success'>" . count($new_uploaded) . " gold collateral photo(s) uploaded successfully!</div>";
+        } else {
+            $err_txt = !empty($upload_errors) ? implode('<br>', $upload_errors) : 'No valid file selected or file size exceeded server limit.';
+            $_SESSION['message'] = "<div class='alert alert-danger'>Photo upload failed:<br>" . $err_txt . "</div>";
+        }
+    }
+    header("Location: loan-details.php?id=" . $loan_id);
+    exit();
+}
+
 // 4. Fetch all Loan and Customer Details (MODIFIED QUERY)
 $loan = null;
 $sql = "SELECT 
@@ -184,39 +304,59 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                              <div class="card border-warning">
                                  <div class="card-body">
                                      <h5 class="card-title mb-3 text-warning"><i class="ri-gold-line me-1"></i> Gold Collateral Details</h5>
-                                     <ul class="list-group list-group-flush">
+                                     <ul class="list-group list-group-flush mb-3">
                                          <li class="list-group-item d-flex justify-content-between"><strong>Gold Weight:</strong> <span><?php echo floatval($loan['gold_weight_grams']); ?> Grams</span></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Applied Gold Rate:</strong> <span>₹<?php echo number_format($loan['gold_rate_per_gram'], 2); ?>/g</span></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Gold Valuation:</strong> <strong class="text-success">₹<?php echo number_format(floatval($loan['gold_weight_grams']) * floatval($loan['gold_rate_per_gram']), 2); ?></strong></li>
-                                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                                             <strong>Gold Item Photo:</strong>
-                                             <?php if (!empty($loan['gold_photo_path'])): ?>
-                                                 <?php
-                                                     $agent_g_img = $loan['gold_photo_path'];
-                                                     if (strpos($agent_g_img, 'Agents/') === 0) {
-                                                         $agent_g_img = substr($agent_g_img, 7);
-                                                     }
-                                                     if (!file_exists(__DIR__ . '/' . $agent_g_img)) {
-                                                         if (strpos($agent_g_img, 'upload/') === 0) {
-                                                             $alt_img = 'uploads/' . substr($agent_g_img, 7);
-                                                             if (file_exists(__DIR__ . '/' . $alt_img)) $agent_g_img = $alt_img;
-                                                         } elseif (strpos($agent_g_img, 'uploads/') === 0) {
-                                                             $alt_img = 'upload/' . substr($agent_g_img, 8);
-                                                             if (file_exists(__DIR__ . '/' . $alt_img)) $agent_g_img = $alt_img;
-                                                         }
-                                                     }
-                                                 ?>
-                                                 <a href="<?php echo htmlspecialchars($agent_g_img); ?>" target="_blank" class="btn btn-sm btn-warning">View Photo</a>
-                                             <?php else: ?>
-                                                 <span class="text-muted">No Photo Uploaded</span>
-                                             <?php endif; ?>
-                                         </li>
                                      </ul>
-                                     <?php if (!empty($loan['gold_photo_path'])): ?>
-                                         <div class="mt-3 text-center">
-                                             <img src="<?php echo htmlspecialchars($agent_g_img); ?>" alt="Gold Collateral" class="img-fluid rounded border" style="max-height: 180px;">
+
+                                     <?php
+                                         $raw_photos = !empty($loan['gold_photo_path']) ? array_filter(explode(',', $loan['gold_photo_path'])) : [];
+                                         $resolved_photos = [];
+                                         foreach ($raw_photos as $p_item) {
+                                             $p_item = trim($p_item);
+                                             if (empty($p_item)) continue;
+                                             if (strpos($p_item, 'Agents/') === 0) $p_item = substr($p_item, 7);
+                                             if (!file_exists(__DIR__ . '/' . $p_item)) {
+                                                 if (strpos($p_item, 'upload/') === 0) {
+                                                     $alt_p = 'uploads/' . substr($p_item, 7);
+                                                     if (file_exists(__DIR__ . '/' . $alt_p)) $p_item = $alt_p;
+                                                 } elseif (strpos($p_item, 'uploads/') === 0) {
+                                                     $alt_p = 'upload/' . substr($p_item, 8);
+                                                     if (file_exists(__DIR__ . '/' . $alt_p)) $p_item = $alt_p;
+                                                 }
+                                             }
+                                             $resolved_photos[] = $p_item;
+                                         }
+                                     ?>
+
+                                     <h6 class="font-weight-bold text-dark mb-2">Gold Collateral Photos (<?php echo count($resolved_photos); ?>)</h6>
+                                     <?php if (!empty($resolved_photos)): ?>
+                                         <div class="d-flex flex-wrap gap-2 mb-3">
+                                             <?php foreach ($resolved_photos as $idx => $p_url): ?>
+                                                 <div class="text-center p-1 border rounded bg-white" style="width: 110px;">
+                                                     <a href="<?php echo htmlspecialchars($p_url); ?>" target="_blank">
+                                                         <img src="<?php echo htmlspecialchars($p_url); ?>" alt="Photo <?php echo $idx+1; ?>" class="img-thumbnail" style="height: 80px; object-fit: cover; width: 100%;">
+                                                     </a>
+                                                     <small class="d-block text-muted mt-1">Photo <?php echo $idx + 1; ?></small>
+                                                 </div>
+                                             <?php endforeach; ?>
                                          </div>
+                                     <?php else: ?>
+                                         <p class="text-muted small mb-3">No photo uploaded yet.</p>
                                      <?php endif; ?>
+
+                                     <div class="p-3 bg-light rounded border">
+                                         <label class="form-label font-weight-bold text-dark mb-2"><?php echo empty($resolved_photos) ? 'Upload Gold Collateral Photo(s)' : 'Add More Gold Collateral Photo(s)'; ?></label>
+                                         <form method="POST" enctype="multipart/form-data" action="loan-details.php?id=<?php echo $loan_id; ?>">
+                                             <input type="hidden" name="action" value="upload_gold_photo">
+                                             <div class="input-group">
+                                                 <input type="file" name="gold_photo[]" multiple accept="image/*" class="form-control form-control-sm" required>
+                                                 <button type="submit" class="btn btn-sm btn-warning"><i class="ri-upload-2-line me-1"></i> Upload</button>
+                                             </div>
+                                             <small class="form-text text-muted">You can select single or multiple photos.</small>
+                                         </form>
+                                     </div>
                                  </div>
                              </div>
                              <?php endif; ?>

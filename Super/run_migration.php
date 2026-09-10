@@ -83,6 +83,10 @@ if ($conn->query($update_payments_sql)) {
     echo "<li style='color:red;'>Error updating payment statuses: " . htmlspecialchars($conn->error) . "</li>";
 }
 
+// 5. Clean up any invalid '0' values in gold_photo_path
+$conn->query("UPDATE loans SET gold_photo_path = NULL WHERE gold_photo_path = '0'");
+echo "<li style='color:green;'>Cleaned up invalid photo path entries.</li>";
+
 echo "</ul>";
 echo "<h3 style='font-family:sans-serif; color:green;'>Migration Finished Successfully!</h3>";
 echo "<p style='font-family:sans-serif;'><a href='settings.php'>Go to System Settings</a> | <a href='all-loans.php'>Go to All Loans</a></p>";

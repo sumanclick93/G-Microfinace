@@ -50,18 +50,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && isset($_P
     exit();
 }
 
-// --- Fetch Pending Loan Payments ---
+// --- Fetch Loan Payments with Status Filtering & Loan Category ---
+$status_filter = isset($_GET['status']) ? trim($_GET['status']) : 'pending';
+$valid_statuses = ['pending', 'approved', 'rejected', 'all'];
+if (!in_array($status_filter, $valid_statuses)) {
+    $status_filter = 'pending';
+}
+
+$where_clause = "";
+if ($status_filter === 'pending') {
+    $where_clause = "WHERE p.status = 'pending'";
+} elseif ($status_filter === 'approved') {
+    $where_clause = "WHERE p.status = 'approved'";
+} elseif ($status_filter === 'rejected') {
+    $where_clause = "WHERE p.status = 'rejected'";
+} else {
+    $where_clause = "WHERE 1=1";
+}
+
 $pending_payments = [];
 $sql = "SELECT 
-            p.id as payment_id, p.amount_paid, p.payment_date, p.proof_image, p.notes,
+            p.id as payment_id, p.amount_paid, p.payment_date, p.proof_image, p.notes, p.status as payment_status,
+            l.id as loan_id, l.loan_type,
             c.full_name as customer_name, c.customer_id_string,
             a.first_name as agent_first, a.last_name as agent_last
         FROM payments p
         JOIN loans l ON p.loan_id = l.id
         JOIN customers c ON l.customer_id = c.id
         LEFT JOIN agents a ON c.agent_id = a.id
-        WHERE p.status = 'pending'
-        ORDER BY p.payment_date ASC";
+        $where_clause
+        ORDER BY p.payment_date DESC";
 
 $result = $conn->query($sql);
 if ($result && $result->num_rows > 0) {
@@ -85,9 +103,20 @@ if ($result && $result->num_rows > 0) {
                         <div class="col-sm-12">
                             <div class="card card-table">
                                 <div class="card-body">
-                                    <div class="title-header option-title">
-                                        <h5>Pending Loan Payments</h5>
-                                        <p class="text-muted mb-0">Review screenshots uploaded by customers via the App.</p>
+                                    <div class="title-header option-title d-flex flex-wrap justify-content-between align-items-center mb-3">
+                                        <div>
+                                            <h5>Loan Payments Review</h5>
+                                            <p class="text-muted mb-0">Review payments date-wise & loan category-wise.</p>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2 mt-2 mt-sm-0">
+                                            <label class="mb-0 font-weight-bold text-dark me-1">Filter:</label>
+                                            <select class="form-select form-select-sm w-auto" onchange="location.href='pending-loan-payments.php?status=' + this.value;">
+                                                <option value="pending" <?php if ($status_filter === 'pending') echo 'selected'; ?>>Pending Approval</option>
+                                                <option value="approved" <?php if ($status_filter === 'approved') echo 'selected'; ?>>Approved</option>
+                                                <option value="rejected" <?php if ($status_filter === 'rejected') echo 'selected'; ?>>Rejected</option>
+                                                <option value="all" <?php if ($status_filter === 'all') echo 'selected'; ?>>All Payments</option>
+                                            </select>
+                                        </div>
                                     </div>
 
                                     <?php if (!empty($message)) echo $message; ?>
@@ -98,45 +127,56 @@ if ($result && $result->num_rows > 0) {
                                                 <tr>
                                                     <th>Date & Time</th>
                                                     <th>Customer</th>
+                                                    <th>Loan Category</th>
                                                     <th>Amount</th>
                                                     <th>Proof Image</th>
-                                                    <th>Action</th>
+                                                    <th>Action / Status</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php if (empty($pending_payments)) : ?>
+                                                <?php foreach ($pending_payments as $payment) : ?>
                                                     <tr>
-                                                        <td colspan="5" class="text-center py-4 text-muted"><strong>No pending loan payments to review!</strong></td>
-                                                    </tr>
-                                                <?php else : ?>
-                                                    <?php foreach ($pending_payments as $payment) : ?>
-                                                        <tr>
-                                                            <td style="font-size: 13px;">
-                                                                <?php echo date('d M Y, h:i A', strtotime($payment['payment_date'])); ?><br>
-                                                                <small class="text-muted"><?php echo htmlspecialchars($payment['notes']); ?></small>
-                                                            </td>
-                                                            <td>
-                                                                <div class="user-name">
-                                                                    <span style="font-weight: 600;"><?php echo htmlspecialchars($payment['customer_name']); ?></span>
-                                                                    <span class="text-muted">(ID: <?php echo htmlspecialchars($payment['customer_id_string']); ?>)</span><br>
-                                                                    <small class="text-primary">Agent: <?php echo htmlspecialchars($payment['agent_first'] . ' ' . $payment['agent_last']); ?></small>
-                                                                </div>
-                                                            </td>
-                                                            <td style="font-weight: bold; color: #28a745; font-size: 15px;">
-                                                                ₹<?php echo number_format($payment['amount_paid'], 2); ?>
-                                                            </td>
-                                                            <td>
-                                                                <?php 
-                                                                    $proof_path = '../api/uploads/proofs/' . $payment['proof_image']; 
-                                                                ?>
+                                                        <td style="font-size: 13px;">
+                                                            <?php echo date('d M Y, h:i A', strtotime($payment['payment_date'])); ?><br>
+                                                            <small class="text-muted"><?php echo htmlspecialchars($payment['notes']); ?></small>
+                                                        </td>
+                                                        <td>
+                                                            <div class="user-name">
+                                                                <span style="font-weight: 600;"><?php echo htmlspecialchars($payment['customer_name']); ?></span>
+                                                                <span class="text-muted">(ID: <?php echo htmlspecialchars($payment['customer_id_string']); ?>)</span><br>
+                                                                <small class="text-primary">Agent: <?php echo htmlspecialchars(($payment['agent_first'] ?? 'Direct') . ' ' . ($payment['agent_last'] ?? '')); ?></small>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <?php
+                                                                $l_type = $payment['loan_type'] ?? 'standard';
+                                                                if ($l_type === 'gold') {
+                                                                    echo '<span class="badge bg-warning text-dark"><i class="ri-gold-line me-1"></i>Gold Loan</span>';
+                                                                } elseif ($l_type === 'interest_only') {
+                                                                    echo '<span class="badge bg-primary">Interest Loan</span>';
+                                                                } else {
+                                                                    echo '<span class="badge bg-info">Standard Loan</span>';
+                                                                }
+                                                            ?>
+                                                        </td>
+                                                        <td style="font-weight: bold; color: #28a745; font-size: 15px;">
+                                                            ₹<?php echo number_format($payment['amount_paid'], 2); ?>
+                                                        </td>
+                                                        <td>
+                                                            <?php if (!empty($payment['proof_image'])): ?>
+                                                                <?php $proof_path = '../api/uploads/proofs/' . $payment['proof_image']; ?>
                                                                 <button class="btn btn-sm btn-info text-white view-proof-btn" 
                                                                         data-bs-toggle="modal" 
                                                                         data-bs-target="#proofModal" 
                                                                         data-img="<?php echo htmlspecialchars($proof_path); ?>">
                                                                     <i class="ri-image-line"></i> View Receipt
                                                                 </button>
-                                                            </td>
-                                                            <td>
+                                                            <?php else: ?>
+                                                                <span class="text-muted small">No Receipt Uploaded</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td>
+                                                            <?php if ($payment['payment_status'] === 'pending'): ?>
                                                                 <ul style="display: flex; gap: 10px; align-items: center; list-style: none; padding: 0; margin: 0;">
                                                                     <li>
                                                                         <a href="javascript:void(0)" class="action-btn" data-bs-toggle="modal" data-bs-target="#approveModal" data-id="<?php echo $payment['payment_id']; ?>" title="Approve Payment">
@@ -149,10 +189,14 @@ if ($result && $result->num_rows > 0) {
                                                                         </a>
                                                                     </li>
                                                                 </ul>
-                                                            </td>
-                                                        </tr>
-                                                    <?php endforeach; ?>
-                                                <?php endif; ?>
+                                                            <?php elseif ($payment['payment_status'] === 'approved'): ?>
+                                                                <span class="badge bg-success"><i class="ri-checkbox-circle-line me-1"></i>Approved</span>
+                                                            <?php else: ?>
+                                                                <span class="badge bg-danger"><i class="ri-close-circle-line me-1"></i>Rejected</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
                                             </tbody>
                                         </table>
                                     </div>

@@ -85,26 +85,33 @@ if (isset($_SESSION['customer_id'])) {
                     $gold_rate = !is_null($loan_details['gold_rate_per_gram']) ? (float)$loan_details['gold_rate_per_gram'] : null;
                     $gold_valuation = (!empty($gold_weight) && !empty($gold_rate)) ? round($gold_weight * $gold_rate, 2) : null;
                     $raw_dt_photo = $loan_details['gold_photo_path'] ?? '';
+                    $gold_photo_urls = [];
                     if (!empty($raw_dt_photo)) {
-                        if (strpos($raw_dt_photo, 'http') === 0) {
-                            $gold_photo_url = $raw_dt_photo;
-                        } else {
-                            $rel_dt = (strpos($raw_dt_photo, 'Agents/') === 0) ? $raw_dt_photo : 'Agents/' . ltrim($raw_dt_photo, '/');
-                            $gold_photo_url = $rel_dt;
-                            $disk_dt = __DIR__ . '/../../' . $rel_dt;
-                            if (!file_exists($disk_dt)) {
-                                if (strpos($rel_dt, 'Agents/upload/') === 0) {
-                                    $alt_dt = 'Agents/uploads/' . substr($rel_dt, 14);
-                                    if (file_exists(__DIR__ . '/../../' . $alt_dt)) $gold_photo_url = $alt_dt;
-                                } elseif (strpos($rel_dt, 'Agents/uploads/') === 0) {
-                                    $alt_dt = 'Agents/upload/' . substr($rel_dt, 15);
-                                    if (file_exists(__DIR__ . '/../../' . $alt_dt)) $gold_photo_url = $alt_dt;
+                        $raw_paths = explode(',', $raw_dt_photo);
+                        foreach ($raw_paths as $raw_path_item) {
+                            $raw_path_item = trim($raw_path_item);
+                            if (empty($raw_path_item)) continue;
+
+                            if (strpos($raw_path_item, 'http') === 0) {
+                                $gold_photo_urls[] = $raw_path_item;
+                            } else {
+                                $rel_dt = (strpos($raw_path_item, 'Agents/') === 0) ? $raw_path_item : 'Agents/' . ltrim($raw_path_item, '/');
+                                $url_dt = $rel_dt;
+                                $disk_dt = __DIR__ . '/../../' . $rel_dt;
+                                if (!file_exists($disk_dt)) {
+                                    if (strpos($rel_dt, 'Agents/upload/') === 0) {
+                                        $alt_dt = 'Agents/uploads/' . substr($rel_dt, 14);
+                                        if (file_exists(__DIR__ . '/../../' . $alt_dt)) $url_dt = $alt_dt;
+                                    } elseif (strpos($rel_dt, 'Agents/uploads/') === 0) {
+                                        $alt_dt = 'Agents/upload/' . substr($rel_dt, 15);
+                                        if (file_exists(__DIR__ . '/../../' . $alt_dt)) $url_dt = $alt_dt;
+                                    }
                                 }
+                                $gold_photo_urls[] = $url_dt;
                             }
                         }
-                    } else {
-                        $gold_photo_url = null;
                     }
+                    $gold_photo_url = !empty($gold_photo_urls) ? $gold_photo_urls[0] : null;
 
                     // --- 6. Format Success Response ---
                     $response['status'] = 'success';
@@ -120,6 +127,8 @@ if (isset($_SESSION['customer_id'])) {
                         'gold_rate_per_gram' => $gold_rate,
                         'gold_valuation' => $gold_valuation,
                         'gold_photo_url' => $gold_photo_url,
+                        'gold_photo_urls' => $gold_photo_urls,
+                        'gold_photos' => $gold_photo_urls,
                         'interest_rate' => (float)$loan_details['interest_rate'],
                         'tenure_description' => $loan_details['tenure'] . ' ' . ucfirst($loan_details['repayment_cycle']) . ' Payments',
                         'status' => $loan_details['status'],

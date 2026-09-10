@@ -90,26 +90,35 @@ if (isset($_SESSION['customer_id'])) {
             }
 
             $raw_api_photo = $row['gold_photo_path'] ?? '';
+            $gold_photo_urls = [];
             if (!empty($raw_api_photo)) {
-                if (strpos($raw_api_photo, 'http') === 0) {
-                    $row['gold_photo_url'] = $raw_api_photo;
-                } else {
-                    $rel_api = (strpos($raw_api_photo, 'Agents/') === 0) ? $raw_api_photo : 'Agents/' . ltrim($raw_api_photo, '/');
-                    $row['gold_photo_url'] = $rel_api;
-                    $disk_p = __DIR__ . '/../../' . $rel_api;
-                    if (!file_exists($disk_p)) {
-                        if (strpos($rel_api, 'Agents/upload/') === 0) {
-                            $alt_api = 'Agents/uploads/' . substr($rel_api, 14);
-                            if (file_exists(__DIR__ . '/../../' . $alt_api)) $row['gold_photo_url'] = $alt_api;
-                        } elseif (strpos($rel_api, 'Agents/uploads/') === 0) {
-                            $alt_api = 'Agents/upload/' . substr($rel_api, 15);
-                            if (file_exists(__DIR__ . '/../../' . $alt_api)) $row['gold_photo_url'] = $alt_api;
+                $raw_paths = explode(',', $raw_api_photo);
+                foreach ($raw_paths as $raw_path_item) {
+                    $raw_path_item = trim($raw_path_item);
+                    if (empty($raw_path_item)) continue;
+
+                    if (strpos($raw_path_item, 'http') === 0) {
+                        $gold_photo_urls[] = $raw_path_item;
+                    } else {
+                        $rel_api = (strpos($raw_path_item, 'Agents/') === 0) ? $raw_path_item : 'Agents/' . ltrim($raw_path_item, '/');
+                        $url_api = $rel_api;
+                        $disk_p = __DIR__ . '/../../' . $rel_api;
+                        if (!file_exists($disk_p)) {
+                            if (strpos($rel_api, 'Agents/upload/') === 0) {
+                                $alt_api = 'Agents/uploads/' . substr($rel_api, 14);
+                                if (file_exists(__DIR__ . '/../../' . $alt_api)) $url_api = $alt_api;
+                            } elseif (strpos($rel_api, 'Agents/uploads/') === 0) {
+                                $alt_api = 'Agents/upload/' . substr($rel_api, 15);
+                                if (file_exists(__DIR__ . '/../../' . $alt_api)) $url_api = $alt_api;
+                            }
                         }
+                        $gold_photo_urls[] = $url_api;
                     }
                 }
-            } else {
-                $row['gold_photo_url'] = null;
             }
+            $row['gold_photo_url'] = !empty($gold_photo_urls) ? $gold_photo_urls[0] : null;
+            $row['gold_photo_urls'] = $gold_photo_urls;
+            $row['gold_photos'] = $gold_photo_urls;
             unset($row['gold_photo_path']);
 
             // Add keys
