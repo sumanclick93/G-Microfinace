@@ -72,6 +72,12 @@
                             <span>Pending Loan Payments</span>
                         </a>
                     </li>
+                    <li class="sidebar-list">
+                        <a class="sidebar-link sidebar-title link-nav" href="all-payments.php">
+                            <i data-feather="dollar-sign"></i>
+                            <span>All Payment Records</span>
+                        </a>
+                    </li>
                     <li class="sidebar-list-item">
                         <a class="sidebar-link" href="reports.php">
                             <i data-feather="bar-chart-2"></i>

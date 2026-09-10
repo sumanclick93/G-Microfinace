@@ -147,6 +147,33 @@ if ($rds_query) {
         }
     }
 }
+
+// 4. Loan Type Breakdown Metrics for Agent
+// Standard Loans
+$std_disbursed_res = $conn->query("SELECT COALESCE(SUM(loan_amount),0) as total FROM loans WHERE agent_id = $agent_id AND loan_type = 'standard' AND status IN ('active', 'paid')");
+$std_disbursed = $std_disbursed_res->fetch_assoc()['total'] ?? 0;
+$std_active_res = $conn->query("SELECT COUNT(id) as total FROM loans WHERE agent_id = $agent_id AND loan_type = 'standard' AND status = 'active'");
+$std_active_count = $std_active_res->fetch_assoc()['total'] ?? 0;
+$std_coll_res = $conn->query("SELECT COALESCE(SUM(p.amount_paid),0) as total FROM payments p JOIN loans l ON p.loan_id = l.id WHERE (p.collected_by_agent_id = $agent_id OR l.agent_id = $agent_id) AND l.loan_type = 'standard' AND p.status != 'rejected'");
+$std_collections = $std_coll_res->fetch_assoc()['total'] ?? 0;
+
+// Interest-Only Loans
+$int_disbursed_res = $conn->query("SELECT COALESCE(SUM(loan_amount),0) as total FROM loans WHERE agent_id = $agent_id AND loan_type = 'interest_only' AND status IN ('active', 'paid')");
+$int_disbursed = $int_disbursed_res->fetch_assoc()['total'] ?? 0;
+$int_active_res = $conn->query("SELECT COUNT(id) as total FROM loans WHERE agent_id = $agent_id AND loan_type = 'interest_only' AND status = 'active'");
+$int_active_count = $int_active_res->fetch_assoc()['total'] ?? 0;
+$int_coll_res = $conn->query("SELECT COALESCE(SUM(p.amount_paid),0) as total FROM payments p JOIN loans l ON p.loan_id = l.id WHERE (p.collected_by_agent_id = $agent_id OR l.agent_id = $agent_id) AND l.loan_type = 'interest_only' AND p.status != 'rejected'");
+$int_collections = $int_coll_res->fetch_assoc()['total'] ?? 0;
+
+// Gold Loans
+$gold_disbursed_res = $conn->query("SELECT COALESCE(SUM(loan_amount),0) as total, COALESCE(SUM(gold_weight_grams),0) as total_weight FROM loans WHERE agent_id = $agent_id AND loan_type = 'gold' AND status IN ('active', 'paid')");
+$gold_row = $gold_disbursed_res->fetch_assoc();
+$gold_disbursed = $gold_row['total'] ?? 0;
+$gold_weight = $gold_row['total_weight'] ?? 0;
+$gold_active_res = $conn->query("SELECT COUNT(id) as total FROM loans WHERE agent_id = $agent_id AND loan_type = 'gold' AND status = 'active'");
+$gold_active_count = $gold_active_res->fetch_assoc()['total'] ?? 0;
+$gold_coll_res = $conn->query("SELECT COALESCE(SUM(p.amount_paid),0) as total FROM payments p JOIN loans l ON p.loan_id = l.id WHERE (p.collected_by_agent_id = $agent_id OR l.agent_id = $agent_id) AND l.loan_type = 'gold' AND p.status != 'rejected'");
+$gold_collections = $gold_coll_res->fetch_assoc()['total'] ?? 0;
 ?>
 
 <!DOCTYPE html>
@@ -166,17 +193,109 @@ if ($rds_query) {
                             </div>
                         </div>
 
-                        <div class="col-12">
+                        <!-- Overall Agent Overview -->
+                        <div class="col-12 mb-4">
+                            <h5 class="mb-3 fw-bold text-dark"><i class="ri-dashboard-3-line me-2"></i>My Portfolio Overview</h5>
                             <div class="row g-3">
-                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100"><h6 class="text-muted">My Total Customers</h6><h2><?php echo $total_customers; ?></h2></div></div>
-                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100"><h6 class="text-muted">My Active Loans</h6><h2><?php echo $active_loans_count; ?></h2></div></div>
-                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100"><h6 class="text-muted">My Active RDs</h6><h2><?php echo $total_active_rds; ?></h2></div></div>
-                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100"><h6 class="text-muted">My Loan Collections</h6><h2>₹<?php echo number_format($total_collections); ?></h2></div></div>
-                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100"><h6 class="text-muted">My RD Collections</h6><h2>₹<?php echo number_format($total_rd_collections); ?></h2></div></div>
-                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100"><h6 class="text-muted">My Total Collections</h6><h2 class="text-success">₹<?php echo number_format($my_total_collections); ?></h2></div></div>
-                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100"><h6 class="text-muted">My Defaulter Accounts</h6><h2 class="text-danger"><?php echo $default_accounts_count; ?></h2></div></div>
-                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100"><h6 class="text-muted">My Total Default Amount</h6><h2 class="text-danger">₹<?php echo number_format($total_default_amount); ?></h2></div></div>
-                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100"><h6 class="text-muted">My Wallet Balance</h6><h2 class="text-success">₹<?php echo number_format($wallet_balance); ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Total Customers</h6><h2><?php echo $total_customers; ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Active Loans</h6><h2><?php echo $active_loans_count; ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Active RDs</h6><h2><?php echo $total_active_rds; ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Loan Collections</h6><h2>₹<?php echo number_format($total_collections); ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My RD Collections</h6><h2>₹<?php echo number_format($total_rd_collections); ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Total Collections</h6><h2 class="text-success">₹<?php echo number_format($my_total_collections); ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Defaulter Accounts</h6><h2 class="text-danger"><?php echo $default_accounts_count; ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Total Default Amount</h6><h2 class="text-danger">₹<?php echo number_format($total_default_amount); ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Wallet Balance</h6><h2 class="text-success">₹<?php echo number_format($wallet_balance); ?></h2></div></div>
+                            </div>
+                        </div>
+
+                        <!-- Loan Type Specific Breakdown Blocks -->
+                        <div class="col-12 mb-4">
+                            <h5 class="mb-3 fw-bold text-dark"><i class="ri-git-branch-line me-2"></i>My Loan Types Overview & Breakdown</h5>
+                            <div class="row g-3">
+                                <!-- Standard Loan Block -->
+                                <div class="col-lg-4 col-md-12">
+                                    <div class="card border-0 shadow-sm rounded-3 h-100" style="border-top: 4px solid #17a2b8 !important;">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                                <span class="badge bg-info text-white fs-6 px-3 py-2"><i class="ri-bank-card-line me-1"></i>Standard Loans</span>
+                                                <span class="text-muted small fw-bold">Active: <?php echo $std_active_count; ?></span>
+                                            </div>
+                                            <div class="row text-center g-2 mt-2">
+                                                <div class="col-6">
+                                                    <div class="p-2 bg-light rounded">
+                                                        <small class="text-muted d-block">Disbursed</small>
+                                                        <strong class="text-dark fs-6">₹<?php echo number_format($std_disbursed); ?></strong>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="p-2 bg-light-success rounded">
+                                                        <small class="text-muted d-block">Collected</small>
+                                                        <strong class="text-success fs-6">₹<?php echo number_format($std_collections); ?></strong>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Interest Loan Block -->
+                                <div class="col-lg-4 col-md-12">
+                                    <div class="card border-0 shadow-sm rounded-3 h-100" style="border-top: 4px solid #0d6efd !important;">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                                <span class="badge bg-primary text-white fs-6 px-3 py-2"><i class="ri-percent-line me-1"></i>Interest Loans</span>
+                                                <span class="text-muted small fw-bold">Active: <?php echo $int_active_count; ?></span>
+                                            </div>
+                                            <div class="row text-center g-2 mt-2">
+                                                <div class="col-6">
+                                                    <div class="p-2 bg-light rounded">
+                                                        <small class="text-muted d-block">Disbursed</small>
+                                                        <strong class="text-dark fs-6">₹<?php echo number_format($int_disbursed); ?></strong>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="p-2 bg-light-success rounded">
+                                                        <small class="text-muted d-block">Collected</small>
+                                                        <strong class="text-success fs-6">₹<?php echo number_format($int_collections); ?></strong>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Gold Loan Block -->
+                                <div class="col-lg-4 col-md-12">
+                                    <div class="card border-0 shadow-sm rounded-3 h-100" style="border-top: 4px solid #ffc107 !important;">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                                <span class="badge bg-warning text-dark fs-6 px-3 py-2"><i class="ri-gold-line me-1"></i>Gold Loans</span>
+                                                <span class="text-muted small fw-bold">Active: <?php echo $gold_active_count; ?></span>
+                                            </div>
+                                            <div class="row text-center g-2 mt-2">
+                                                <div class="col-4">
+                                                    <div class="p-2 bg-light rounded">
+                                                        <small class="text-muted d-block">Disbursed</small>
+                                                        <strong class="text-dark fs-6">₹<?php echo number_format($gold_disbursed); ?></strong>
+                                                    </div>
+                                                </div>
+                                                <div class="col-4">
+                                                    <div class="p-2 bg-light-warning rounded">
+                                                        <small class="text-muted d-block">Gold Pledged</small>
+                                                        <strong class="text-dark fs-6"><?php echo number_format($gold_weight, 2); ?>g</strong>
+                                                    </div>
+                                                </div>
+                                                <div class="col-4">
+                                                    <div class="p-2 bg-light-success rounded">
+                                                        <small class="text-muted d-block">Collected</small>
+                                                        <strong class="text-success fs-6">₹<?php echo number_format($gold_collections); ?></strong>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

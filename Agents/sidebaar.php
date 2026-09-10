@@ -93,6 +93,12 @@
                         </a>
                     </li>
                     <li class="sidebar-list">
+                        <a class="sidebar-link sidebar-title link-nav" href="all-payments.php">
+                            <i data-feather="dollar-sign"></i>
+                            <span>All Payments</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-list">
                         <a class="sidebar-link sidebar-title link-nav" href="payment-qr.php">
                             <i class="ri-qr-code-line"></i>
                             <span>Payment QR</span>
