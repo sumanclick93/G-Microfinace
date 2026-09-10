@@ -2,8 +2,12 @@
     <div id="sidebarEffect"></div>
     <div>
         <div class="logo-wrapper logo-wrapper-center">
-            <a href="index.html" data-bs-original-title="" title="">
-                <img class="img-fluid for-white" src="assets/images/logo/full-white.png?v=<?php echo time(); ?>" alt="logo">
+            <a href="dashboard.php" class="d-flex align-items-center text-decoration-none no-zoom" style="gap: 10px;">
+                <div style="background: #ffffff; color: #0f5132; width: 34px; height: 34px; border-radius: 8px; font-weight: 800; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2); flex-shrink: 0;">SF</div>
+                <div class="text-start">
+                    <span style="color: #ffffff; font-weight: 700; font-size: 14px; display: block; line-height: 1.2; white-space: nowrap;">Samajbandhan</span>
+                    <span style="color: rgba(255,255,255,0.8); font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">Foundation</span>
+                </div>
             </a>
             <div class="back-btn">
                 <i class="fa fa-angle-left"></i>
@@ -13,10 +17,8 @@
             </div>
         </div>
         <div class="logo-icon-wrapper">
-            <a href="index.html">
-                <img class="img-fluid main-logo main-white" src="assets/images/logo/logo.png?v=<?php echo time(); ?>" alt="logo">
-                <img class="img-fluid main-logo main-dark" src="assets/images/logo/logo-white.png?v=<?php echo time(); ?>"
-                    alt="logo">
+            <a href="dashboard.php" title="Samajbandhan Foundation" class="no-zoom">
+                <div style="background: #ffffff; color: #0f5132; width: 34px; height: 34px; border-radius: 8px; font-weight: 800; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">SF</div>
             </a>
         </div>
         <nav class="sidebar-main">
