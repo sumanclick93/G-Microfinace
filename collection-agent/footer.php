@@ -23,7 +23,7 @@
 
     <!-- DataTables JS -->
     <script src="assets/js/jquery.dataTables.js"></script>
-    <script src="assets/js/custom-data-table.js"></script>
+    <script src="assets/js/custom-data-table.js?v=<?php echo time(); ?>"></script>
 
     <!-- Bootstrap js -->
     <script src="assets/js/bootstrap/bootstrap.bundle.min.js"></script>

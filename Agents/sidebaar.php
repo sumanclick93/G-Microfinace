@@ -77,6 +77,9 @@
                             <li>
                                 <a href="gold-loans.php">Gold Loans</a>
                             </li>
+                            <li>
+                                <a href="all-loans.php">All Loans</a>
+                            </li>
                         </ul>
                     </li>
                     <li class="sidebar-list">

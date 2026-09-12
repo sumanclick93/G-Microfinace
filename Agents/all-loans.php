@@ -26,14 +26,17 @@ $filter_end_date = $_GET['end_date'] ?? '';
 $filter_status = $_GET['status'] ?? '';
 $filter_customer_id = $_GET['customer_id'] ?? '';
 
-// Check if a filter has been explicitly applied/submitted
-$filter_applied = isset($_GET['apply_filter']) || !empty($filter_start_date) || !empty($filter_end_date) || !empty($filter_status) || !empty($filter_customer_id);
+// Check if preset target loan type exists (e.g. from normal-loans.php, interest-loans.php, gold-loans.php)
+$preset_loan_type = isset($target_loan_type) && !empty($target_loan_type);
 
-// Loan type target filter (can be preset by normal-loans.php, interest-loans.php, gold-loans.php, or passed via GET)
+// Loan type target filter
 $target_loan_type = $target_loan_type ?? ($_GET['loan_type'] ?? '');
 if (!in_array($target_loan_type, ['standard', 'interest_only', 'gold'])) {
     $target_loan_type = '';
 }
+
+// Auto-display data on load for clean UX across all loan pages
+$filter_applied = true;
 
 $page_title = "My Loan Applications";
 if ($target_loan_type === 'standard') {
@@ -127,7 +130,7 @@ $current_page_file = basename($_SERVER['PHP_SELF']);
                                             <h5 class="card-title">Filter Loans</h5>
                                             <form class="row g-3" method="GET" action="<?php echo htmlspecialchars($current_page_file); ?>">
                                                 <input type="hidden" name="apply_filter" value="1">
-                                                <?php if (!empty($target_loan_type)): ?>
+                                                <?php if ($preset_loan_type): ?>
                                                     <input type="hidden" name="loan_type" value="<?php echo htmlspecialchars($target_loan_type); ?>">
                                                 <?php endif; ?>
                                                 <div class="col-md-3">
@@ -148,7 +151,18 @@ $current_page_file = basename($_SERVER['PHP_SELF']);
                                                         <option value="rejected" <?php echo ($filter_status == 'rejected') ? 'selected' : ''; ?>>Rejected</option>
                                                     </select>
                                                 </div>
-                                                <div class="col-md-4">
+                                                <?php if (!$preset_loan_type): ?>
+                                                    <div class="col-md-2">
+                                                        <label for="loan_type" class="form-label">Loan Type</label>
+                                                        <select id="loan_type" name="loan_type" class="form-select">
+                                                            <option value="">All Types</option>
+                                                            <option value="standard" <?php echo ($target_loan_type == 'standard') ? 'selected' : ''; ?>>Normal Loans</option>
+                                                            <option value="interest_only" <?php echo ($target_loan_type == 'interest_only') ? 'selected' : ''; ?>>Interest Loans</option>
+                                                            <option value="gold" <?php echo ($target_loan_type == 'gold') ? 'selected' : ''; ?>>Gold Loans</option>
+                                                        </select>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <div class="col-md-<?php echo $preset_loan_type ? '4' : '2'; ?>">
                                                     <label for="customer_id" class="form-label">Customer</label>
                                                     <select id="customer_id" name="customer_id" class="form-select">
                                                         <option value="">All Customers</option>
@@ -167,95 +181,88 @@ $current_page_file = basename($_SERVER['PHP_SELF']);
                                         </div>
                                     </div>
 
-                                    <?php if (!$filter_applied): ?>
-                                        <div class="card my-3 border-0 shadow-sm" style="background: #f8fafc; border-radius: 12px;">
-                                            <div class="card-body text-center p-5">
-                                                <div class="mb-3">
-                                                    <i class="ri-filter-3-line text-primary" style="font-size: 48px; opacity: 0.7;"></i>
-                                                </div>
-                                                <h5 class="text-dark fw-bold">Select Filters To Display Data</h5>
-                                                <p class="text-secondary mb-0">Please select your desired filter criteria above and click <strong>"Filter"</strong> to view loan records.</p>
-                                            </div>
-                                        </div>
-                                    <?php else: ?>
-                                        <div class="table-responsive table-product">
-                                            <table class="table all-package theme-table" id="table_id" data-page-length="10">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Photo</th>
-                                                        <th>Customer Name</th>
-                                                        <?php if (empty($target_loan_type)): ?>
-                                                            <th>Type</th>
-                                                        <?php endif; ?>
-                                                        <th>Loan Amount</th>
-                                                        <?php if ($target_loan_type === 'gold'): ?>
-                                                            <th>Gold Weight</th>
-                                                        <?php endif; ?>
-                                                        <th>Application Date</th>
-                                                        <th>Status</th>
-                                                        <th>View Details</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <?php if (empty($loans)) : ?>
-                                                        <tr><td colspan="<?php echo (empty($target_loan_type) || $target_loan_type === 'gold') ? 7 : 6; ?>" class="text-center text-muted">No loans found matching your criteria.</td></tr>
-                                                    <?php else : ?>
-                                                        <?php foreach ($loans as $loan) : ?>
-                                                            <tr>
-                                                                <td>
-                                                                    <div class="table-image">
-                                                                        <?php $avatar_path = !empty($loan['customer_avatar']) ? 'upload/customers/avatars/' . $loan['customer_avatar'] : 'assets/images/users/default-avatar.png'; ?>
-                                                                        <img src="<?php echo htmlspecialchars($avatar_path); ?>" class="img-fluid" alt="Avatar" style="max-width: 40px; border-radius: 5px;">
-                                                                    </div>
-                                                                </td>
-                                                                <td><?php echo htmlspecialchars($loan['customer_name']); ?></td>
-                                                                <?php if (empty($target_loan_type)): ?>
-                                                                    <td>
-                                                                        <?php
-                                                                            $l_type = $loan['loan_type'] ?? 'standard';
-                                                                            if ($l_type === 'gold') {
-                                                                                echo '<span class="badge bg-warning text-dark">Gold</span>';
-                                                                            } elseif ($l_type === 'interest_only') {
-                                                                                echo '<span class="badge bg-primary">Interest</span>';
-                                                                            } else {
-                                                                                echo '<span class="badge bg-info">Standard</span>';
-                                                                            }
-                                                                        ?>
-                                                                    </td>
-                                                                <?php endif; ?>
-                                                                <td>₹<?php echo number_format($loan['loan_amount']); ?></td>
-                                                                <?php if ($target_loan_type === 'gold'): ?>
-                                                                    <td><span class="badge bg-warning text-dark"><i class="ri-gold-line me-1"></i><?php echo floatval($loan['gold_weight_grams']); ?>g</span></td>
-                                                                <?php endif; ?>
-                                                                <td><?php echo date('d M, Y', strtotime($loan['application_date'])); ?></td>
+                                    <div class="table-responsive table-product">
+                                        <table class="table all-package theme-table" id="table_id" data-page-length="10">
+                                            <thead>
+                                                <tr>
+                                                    <th>Photo</th>
+                                                    <th>Customer Name</th>
+                                                    <?php if (empty($target_loan_type)): ?>
+                                                        <th>Type</th>
+                                                    <?php endif; ?>
+                                                    <th>Loan Amount</th>
+                                                    <?php if ($target_loan_type === 'gold'): ?>
+                                                        <th>Gold Weight</th>
+                                                    <?php endif; ?>
+                                                    <th>Application Date</th>
+                                                    <th>Status</th>
+                                                    <th>View Details</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php
+                                                    $colspan = 6;
+                                                    if (empty($target_loan_type)) { $colspan++; }
+                                                    if ($target_loan_type === 'gold') { $colspan++; }
+                                                ?>
+                                                <?php if (empty($loans)) : ?>
+                                                    <tr><td colspan="<?php echo $colspan; ?>" class="text-center text-muted">No loans found matching your criteria.</td></tr>
+                                                <?php else : ?>
+                                                    <?php foreach ($loans as $loan) : ?>
+                                                        <tr>
+                                                            <td>
+                                                                <div class="table-image">
+                                                                    <?php $avatar_path = !empty($loan['customer_avatar']) ? 'upload/customers/avatars/' . $loan['customer_avatar'] : 'assets/images/users/default-avatar.png'; ?>
+                                                                    <img src="<?php echo htmlspecialchars($avatar_path); ?>" class="img-fluid" alt="Avatar" style="max-width: 40px; border-radius: 5px;">
+                                                                </div>
+                                                            </td>
+                                                            <td><?php echo htmlspecialchars($loan['customer_name']); ?></td>
+                                                            <?php if (empty($target_loan_type)): ?>
                                                                 <td>
                                                                     <?php
-                                                                        $status_clean = strtolower(trim($loan['status']));
-                                                                        $status_color = 'secondary';
-                                                                        switch ($status_clean) {
-                                                                            case 'approved': case 'active': case 'paid': $status_color = 'success'; break;
-                                                                            case 'pending': $status_color = 'warning'; break;
-                                                                            case 'rejected': case 'defaulted': $status_color = 'danger'; break;
-                                                                            case 'closed': $status_color = 'dark'; break;
+                                                                        $l_type = $loan['loan_type'] ?? 'standard';
+                                                                        if ($l_type === 'gold') {
+                                                                            echo '<span class="badge bg-warning text-dark">Gold</span>';
+                                                                        } elseif ($l_type === 'interest_only') {
+                                                                            echo '<span class="badge bg-primary">Interest</span>';
+                                                                        } else {
+                                                                            echo '<span class="badge bg-info">Standard</span>';
                                                                         }
                                                                     ?>
-                                                                    <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucfirst($status_clean); ?></span>
                                                                 </td>
-                                                                <td>
-                                                                    <ul>
-                                                                        <li><a href="loan-details.php?id=<?php echo $loan['id']; ?>" title="View Loan Details"><i class="ri-eye-line"></i></a></li>
-                                                                        <?php if ($loan['status'] === 'pending') : ?>
-                                                                            <li><a href="edit-loan.php?id=<?php echo $loan['id']; ?>" title="Edit Loan"><i class="ri-pencil-line" style="color: var(--theme-color);"></i></a></li>
-                                                                        <?php endif; ?>
-                                                                    </ul>
-                                                                </td>
-                                                            </tr>
-                                                        <?php endforeach; ?>
-                                                    <?php endif; ?>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    <?php endif; ?>
+                                                            <?php endif; ?>
+                                                            <td>₹<?php echo number_format($loan['loan_amount']); ?></td>
+                                                            <?php if ($target_loan_type === 'gold'): ?>
+                                                                <td><span class="badge bg-warning text-dark"><i class="ri-gold-line me-1"></i><?php echo floatval($loan['gold_weight_grams']); ?>g</span></td>
+                                                            <?php endif; ?>
+                                                            <td><?php echo date('d M, Y', strtotime($loan['application_date'])); ?></td>
+                                                            <td>
+                                                                <?php
+                                                                    $status_clean = strtolower(trim($loan['status']));
+                                                                    $status_color = 'secondary';
+                                                                    switch ($status_clean) {
+                                                                        case 'approved': case 'active': case 'paid': $status_color = 'success'; break;
+                                                                        case 'pending': $status_color = 'warning'; break;
+                                                                        case 'rejected': case 'defaulted': $status_color = 'danger'; break;
+                                                                        case 'closed': $status_color = 'dark'; break;
+                                                                    }
+                                                                ?>
+                                                                <span class="badge bg-<?php echo $status_color; ?>"><?php echo ucfirst($status_clean); ?></span>
+                                                            </td>
+                                                            <td>
+                                                                <ul>
+                                                                    <li><a href="loan-details.php?id=<?php echo $loan['id']; ?>" title="View Loan Details"><i class="ri-eye-line"></i></a></li>
+                                                                    <?php if ($loan['status'] === 'pending') : ?>
+                                                                        <li><a href="edit-loan.php?id=<?php echo $loan['id']; ?>" title="Edit Loan"><i class="ri-pencil-line" style="color: var(--theme-color);"></i></a></li>
+                                                                    <?php endif; ?>
+                                                                </ul>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -90,13 +90,13 @@ $details_query = "
         
         COALESCE(l.loan_amount, 0) as loan_principal,
         COALESCE(l.total_repayable_amount, 0) as loan_maturity,
-        (SELECT COALESCE(SUM(amount_paid), 0) FROM payments WHERE loan_id = l.id AND status != 'rejected') as loan_overall_paid,
-        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt WHERE wt.loan_id = t.loan_id AND wt.loan_id IS NOT NULL AND wt.loan_id > 0 AND wt.transaction_type = 'emi-received' AND wt.transaction_date <= t.transaction_date) as running_loan_paid,
+        IF(t.loan_id > 0, (SELECT COALESCE(SUM(amount_paid), 0) FROM payments WHERE loan_id = t.loan_id AND status != 'rejected'), 0) as loan_overall_paid,
+        IF(t.loan_id > 0, (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt WHERE wt.loan_id = t.loan_id AND wt.transaction_type = 'emi-received' AND wt.transaction_date <= t.transaction_date), 0) as running_loan_paid,
         
         COALESCE((rd.deposit_amount * rd.tenure), 0) as rd_principal,
         COALESCE(rd.maturity_amount, 0) as rd_maturity,
-        (SELECT COALESCE(SUM(amount_paid), 0) FROM rd_payments WHERE rd_id = rd.id AND status != 'rejected') as rd_overall_paid,
-        (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt2 WHERE wt2.rd_id = t.rd_id AND wt2.rd_id IS NOT NULL AND wt2.rd_id > 0 AND wt2.transaction_type = 'rd-received' AND wt2.transaction_date <= t.transaction_date) as running_rd_paid
+        IF(t.rd_id > 0, (SELECT COALESCE(SUM(amount_paid), 0) FROM rd_payments WHERE rd_id = t.rd_id AND status != 'rejected'), 0) as rd_overall_paid,
+        IF(t.rd_id > 0, (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt2 WHERE wt2.rd_id = t.rd_id AND wt2.transaction_type = 'rd-received' AND wt2.transaction_date <= t.transaction_date), 0) as running_rd_paid
         
     FROM wallet_transactions t
     LEFT JOIN agents a ON t.agent_id = a.id
@@ -186,8 +186,14 @@ if ($details_result && $details_result->num_rows > 0) {
                                 
                                 $installments_due = 0;
                                 $temp_date = clone $approval_date;
-                                while ($temp_date < $today && $installments_due < (int)($row['loan_tenure'] ?? 0)) {
-                                    $temp_date->modify('+' . $interval_str);
+                                $max_guard = 0;
+                                while ($temp_date < $today && $installments_due < (int)($row['loan_tenure'] ?? 0) && $max_guard < 500) {
+                                    $max_guard++;
+                                    $prev_ts = $temp_date->getTimestamp();
+                                    @$temp_date->modify('+' . $interval_str);
+                                    if ($temp_date->getTimestamp() <= $prev_ts) {
+                                        break;
+                                    }
                                     if ($temp_date <= $today) {
                                         $installments_due++;
                                     }
@@ -197,7 +203,7 @@ if ($details_result && $details_result->num_rows > 0) {
                                 $overdue = max(0.0, $expected_paid - floatval($row['loan_overall_paid'] ?? 0));
                                 $default_amt = min($overdue, max(0, $rem));
                             }
-                        } catch (Exception $e) {
+                        } catch (Throwable $e) {
                             $default_amt = 0;
                         }
                     }
@@ -240,8 +246,14 @@ if ($details_result && $details_result->num_rows > 0) {
 
                                 $installments_due = 0;
                                 $temp_date = clone $rd_start_dt;
-                                while ($temp_date < $today && $installments_due < (int)($row['rd_tenure'] ?? 0)) {
-                                    $temp_date->modify('+' . $interval_str);
+                                $max_guard = 0;
+                                while ($temp_date < $today && $installments_due < (int)($row['rd_tenure'] ?? 0) && $max_guard < 500) {
+                                    $max_guard++;
+                                    $prev_ts = $temp_date->getTimestamp();
+                                    @$temp_date->modify('+' . $interval_str);
+                                    if ($temp_date->getTimestamp() <= $prev_ts) {
+                                        break;
+                                    }
                                     if ($temp_date <= $today) {
                                         $installments_due++;
                                     }
@@ -251,7 +263,7 @@ if ($details_result && $details_result->num_rows > 0) {
                                 $overdue = max(0.0, $expected_paid - floatval($row['rd_overall_paid'] ?? 0));
                                 $default_amt = min($overdue, max(0, $rem));
                             }
-                        } catch (Exception $e) {
+                        } catch (Throwable $e) {
                             $default_amt = 0;
                         }
                     }
