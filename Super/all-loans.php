@@ -249,7 +249,7 @@ if ($filter_applied) {
                                         </div>
                                     <?php else: ?>
                                         <div class="table-responsive table-product">
-                                            <table class="table all-package theme-table" id="table_id">
+                                            <table class="table all-package theme-table" id="table_id" data-page-length="10">
                                                  <thead>
                                                      <tr>
                                                          <th>Photo</th>

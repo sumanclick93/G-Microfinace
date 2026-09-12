@@ -190,12 +190,13 @@ $(document).ready(function () {
         });
 
         // 4. Initialize the DataTable
+        var initPageLength = parseInt($table.attr('data-page-length')) || 100;
         var t = $table.DataTable({
             paging: true,
             ordering: true,
             info: true,
             responsive: true,
-            pageLength: 100,
+            pageLength: initPageLength,
             lengthMenu: [10, 25, 50, 100],
             columnDefs: !hasSerial ? [
                 {
