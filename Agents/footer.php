@@ -47,12 +47,14 @@
     <script src="assets/js/notify/bootstrap-notify.min.js"></script>
     <script src="assets/js/notify/index.js"></script>
 
-    <!-- Apexchar js -->
-    <script src="assets/js/chart/apex-chart/apex-chart1.js"></script>
-    <script src="assets/js/chart/apex-chart/moment.min.js"></script>
-    <script src="assets/js/chart/apex-chart/apex-chart.js"></script>
-    <script src="assets/js/chart/apex-chart/stock-prices.js"></script>
-    <script src="assets/js/chart/apex-chart/chart-custom1.js"></script>
+    <!-- Apexchart js (Loaded conditionally if chart elements exist) -->
+    <script>
+        if (document.querySelector('#bar-chart-earning, #report-chart, #pie-chart-visitors, #linechart, #employ-salary, #saler-summary, #sales-purchase-chart, #expenses-cart')) {
+            ['assets/js/chart/apex-chart/apex-chart1.js', 'assets/js/chart/apex-chart/moment.min.js', 'assets/js/chart/apex-chart/apex-chart.js', 'assets/js/chart/apex-chart/stock-prices.js', 'assets/js/chart/apex-chart/chart-custom1.js'].forEach(function(src) {
+                var s = document.createElement('script'); s.src = src; document.body.appendChild(s);
+            });
+        }
+    </script>
 
 
     <!-- slick slider js -->

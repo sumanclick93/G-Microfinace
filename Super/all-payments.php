@@ -146,21 +146,26 @@ if ($filter_category === 'loan') {
     }
 }
 
+// Check if filter has been explicitly applied / submitted
+$filter_applied = isset($_GET['apply_filter']) || (isset($_GET['category']) && $_GET['category'] !== 'all') || (isset($_GET['loan_type']) && $_GET['loan_type'] !== 'all') || ($filter_customer_id > 0) || ($filter_agent_id > 0) || ($filter_status !== 'all') || !empty($filter_start_date) || !empty($filter_end_date);
+
 $payments = [];
 $total_amount = 0.0;
 $total_loan_amount = 0.0;
 $total_rd_amount = 0.0;
 
-$result = $conn->query($final_sql);
-if ($result && $result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $payments[] = $row;
-        $amt = floatval($row['amount_paid']);
-        $total_amount += $amt;
-        if ($row['record_type'] === 'loan') {
-            $total_loan_amount += $amt;
-        } else {
-            $total_rd_amount += $amt;
+if ($filter_applied) {
+    $result = $conn->query($final_sql);
+    if ($result && $result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $payments[] = $row;
+            $amt = floatval($row['amount_paid']);
+            $total_amount += $amt;
+            if ($row['record_type'] === 'loan') {
+                $total_loan_amount += $amt;
+            } else {
+                $total_rd_amount += $amt;
+            }
         }
     }
 }
@@ -248,6 +253,7 @@ if ($result && $result->num_rows > 0) {
                         </div>
                         <div class="card-body p-3">
                             <form method="GET" action="all-payments.php" class="row g-3">
+                                <input type="hidden" name="apply_filter" value="1">
                                 <!-- Category Filter -->
                                 <div class="col-md-2 col-sm-6">
                                     <label class="form-label small fw-bold">Payment Category</label>
@@ -327,113 +333,114 @@ if ($result && $result->num_rows > 0) {
                         </div>
                     </div>
 
-                    <!-- Payments Table Card -->
-                    <div class="row">
-                        <div class="col-sm-12">
-                            <div class="card card-table shadow-sm border-0">
-                                <div class="card-body">
-                                    <div class="table-responsive">
-                                        <table class="table all-package theme-table" id="table_id">
-                                            <thead>
-                                                <tr>
-                                                    <th>Date & Time</th>
-                                                    <th>Type / Category</th>
-                                                    <th>Customer</th>
-                                                    <th>Agent</th>
-                                                    <th>Amount Paid</th>
-                                                    <th>Status</th>
-                                                    <th>Receipt</th>
-                                                    <th>Notes</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <?php foreach ($payments as $pay): ?>
+                    <?php if (!$filter_applied): ?>
+                        <div class="card my-3 border-0 shadow-sm" style="background: #f8fafc; border-radius: 12px;">
+                            <div class="card-body text-center p-5">
+                                <div class="mb-3">
+                                    <i class="ri-filter-3-line text-primary" style="font-size: 48px; opacity: 0.7;"></i>
+                                </div>
+                                <h5 class="text-dark fw-bold">Select Filters To Display Data</h5>
+                                <p class="text-secondary mb-0">Please select your desired filter options above and click <strong>"Apply Filters"</strong> to view payment records.</p>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <!-- Payments Table Card -->
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <div class="card card-table shadow-sm border-0">
+                                    <div class="card-body">
+                                        <div class="table-responsive">
+                                            <table class="table all-package theme-table" id="table_id">
+                                                <thead>
                                                     <tr>
-                                                        <!-- Date & Time -->
-                                                        <td style="font-size: 13px; font-weight: 500;">
-                                                            <?php echo date('d M Y, h:i A', strtotime($pay['payment_date'])); ?>
-                                                        </td>
-
-                                                        <!-- Type / Category -->
-                                                        <td>
-                                                            <?php 
-                                                            if ($pay['record_type'] === 'rd') {
-                                                                echo '<span class="badge bg-success text-white"><i class="ri-safe-2-line me-1"></i>RD Deposit</span>';
-                                                            } else {
-                                                                $st = $pay['sub_type'] ?? 'standard';
-                                                                if ($st === 'gold') {
-                                                                    echo '<span class="badge bg-warning text-dark"><i class="ri-gold-line me-1"></i>Gold Loan</span>';
-                                                                } elseif ($st === 'interest_only') {
-                                                                    echo '<span class="badge bg-primary text-white"><i class="ri-percent-line me-1"></i>Interest Loan</span>';
-                                                                } else {
-                                                                    echo '<span class="badge bg-info text-white"><i class="ri-bank-card-line me-1"></i>Standard Loan</span>';
-                                                                }
-                                                            }
-                                                            ?>
-                                                        </td>
-
-                                                        <!-- Customer -->
-                                                        <td>
-                                                            <div class="user-name">
-                                                                <span style="font-weight: 600;"><?php echo htmlspecialchars($pay['customer_name']); ?></span><br>
-                                                                <small class="text-muted">(ID: <?php echo htmlspecialchars($pay['customer_id_string']); ?>)</small>
-                                                            </div>
-                                                        </td>
-
-                                                        <!-- Agent -->
-                                                        <td>
-                                                            <span class="text-dark font-weight-500" style="font-size: 13px;">
-                                                                <?php echo htmlspecialchars(trim($pay['agent_name']) ?: 'Direct'); ?>
-                                                            </span>
-                                                        </td>
-
-                                                        <!-- Amount Paid -->
-                                                        <td style="font-weight: bold; color: #28a745; font-size: 15px;">
-                                                            ₹<?php echo number_format($pay['amount_paid'], 2); ?>
-                                                        </td>
-
-                                                        <!-- Status -->
-                                                        <td>
-                                                            <?php 
-                                                            $st_val = strtolower($pay['payment_status'] ?? 'approved');
-                                                            if ($st_val === 'approved') {
-                                                                echo '<span class="badge bg-success"><i class="ri-checkbox-circle-line me-1"></i>Approved</span>';
-                                                            } elseif ($st_val === 'pending') {
-                                                                echo '<span class="badge bg-warning text-dark"><i class="ri-time-line me-1"></i>Pending</span>';
-                                                            } else {
-                                                                echo '<span class="badge bg-danger"><i class="ri-close-circle-line me-1"></i>Rejected</span>';
-                                                            }
-                                                            ?>
-                                                        </td>
-
-                                                        <!-- Proof Image -->
-                                                        <td>
-                                                            <?php if (!empty($pay['proof_image'])): ?>
-                                                                <?php $proof_path = '../api/uploads/proofs/' . $pay['proof_image']; ?>
-                                                                <button class="btn btn-sm btn-info text-white view-proof-btn py-1 px-2" 
-                                                                        data-bs-toggle="modal" 
-                                                                        data-bs-target="#proofModal" 
-                                                                        data-img="<?php echo htmlspecialchars($proof_path); ?>">
-                                                                    <i class="ri-image-line me-1"></i> View Receipt
-                                                                </button>
-                                                            <?php else: ?>
-                                                                <span class="text-muted small">No Receipt</span>
-                                                            <?php endif; ?>
-                                                        </td>
-
-                                                        <!-- Notes -->
-                                                        <td style="font-size: 12px;" class="text-muted">
-                                                            <?php echo htmlspecialchars($pay['notes'] ?? '-'); ?>
-                                                        </td>
+                                                        <th>Date & Time</th>
+                                                        <th>Type / Category</th>
+                                                        <th>Customer</th>
+                                                        <th>Agent</th>
+                                                        <th>Amount Paid</th>
+                                                        <th>Status</th>
+                                                        <th>Receipt</th>
+                                                        <th>Notes</th>
                                                     </tr>
-                                                <?php endforeach; ?>
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    <?php if (empty($payments)): ?>
+                                                        <tr>
+                                                            <td colspan="8" class="text-center text-muted py-4">No payment records found for the selected filter criteria.</td>
+                                                        </tr>
+                                                    <?php else: ?>
+                                                        <?php foreach ($payments as $pay): ?>
+                                                            <tr>
+                                                                <td style="font-size: 13px; font-weight: 500;">
+                                                                    <?php echo date('d M Y, h:i A', strtotime($pay['payment_date'])); ?>
+                                                                </td>
+                                                                <td>
+                                                                    <?php if ($pay['record_type'] === 'loan'): ?>
+                                                                        <?php 
+                                                                            $ltype = $pay['sub_type'] ?? 'standard';
+                                                                            if ($ltype === 'gold') {
+                                                                                echo '<span class="badge bg-warning text-dark"><i class="ri-gold-line me-1"></i>Gold Loan</span>';
+                                                                            } elseif ($ltype === 'interest_only') {
+                                                                                echo '<span class="badge bg-primary"><i class="ri-percent-line me-1"></i>Interest Loan</span>';
+                                                                            } else {
+                                                                                echo '<span class="badge bg-info"><i class="ri-file-list-3-line me-1"></i>Standard Loan</span>';
+                                                                            }
+                                                                        ?>
+                                                                    <?php else: ?>
+                                                                        <span class="badge bg-success"><i class="ri-safe-2-line me-1"></i>RD Deposit</span>
+                                                                    <?php endif; ?>
+                                                                </td>
+                                                                <td>
+                                                                    <div class="fw-bold text-dark"><?php echo htmlspecialchars($pay['customer_name']); ?></div>
+                                                                    <small class="text-muted">(ID: <?php echo htmlspecialchars($pay['customer_id_string']); ?>)</small>
+                                                                </td>
+                                                                <td style="font-size: 13px;">
+                                                                    <?php echo htmlspecialchars($pay['agent_name']); ?>
+                                                                </td>
+                                                                <td class="fw-bold text-success" style="font-size: 14px;">
+                                                                    ₹<?php echo number_format(floatval($pay['amount_paid']), 2); ?>
+                                                                </td>
+                                                                <td>
+                                                                    <?php 
+                                                                        $st = strtolower($pay['payment_status']);
+                                                                        if ($st === 'approved') {
+                                                                            echo '<span class="badge bg-success"><i class="ri-check-line me-1"></i>Approved</span>';
+                                                                        } elseif ($st === 'pending') {
+                                                                            echo '<span class="badge bg-warning text-dark"><i class="ri-time-line me-1"></i>Pending</span>';
+                                                                        } else {
+                                                                            echo '<span class="badge bg-danger"><i class="ri-close-line me-1"></i>' . ucfirst($st) . '</span>';
+                                                                        }
+                                                                    ?>
+                                                                </td>
+                                                                <td>
+                                                                    <?php if (!empty($pay['proof_image'])): ?>
+                                                                        <?php 
+                                                                            $proof_path = '../Agents/upload/payments/' . $pay['proof_image'];
+                                                                            if (!file_exists($proof_path)) {
+                                                                                $proof_path = 'assets/images/placeholder-receipt.png';
+                                                                            }
+                                                                        ?>
+                                                                        <button type="button" class="btn btn-sm btn-outline-primary view-proof-btn py-1 px-2" data-bs-toggle="modal" data-bs-target="#proofModal" data-img="<?php echo htmlspecialchars($proof_path); ?>">
+                                                                            <i class="ri-image-line me-1"></i>View
+                                                                        </button>
+                                                                    <?php else: ?>
+                                                                        <span class="text-muted small">No Receipt</span>
+                                                                    <?php endif; ?>
+                                                                </td>
+                                                                <td style="font-size: 12px;" class="text-muted">
+                                                                    <?php echo htmlspecialchars($pay['notes'] ?? '-'); ?>
+                                                                </td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                    <?php endif; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    <?php endif; ?>
 
                 </div>
             </div>
