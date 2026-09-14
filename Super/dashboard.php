@@ -28,6 +28,15 @@ $total_active_rds = $active_rds_result->fetch_assoc()['total'] ?? 0;
 $total_rd_collected_result = $conn->query("SELECT SUM(amount_paid) as total FROM rd_payments");
 $total_rd_collections = $total_rd_collected_result->fetch_assoc()['total'] ?? 0;
 
+// FD Metrics
+$active_fds_res = $conn->query("SELECT COUNT(id) as total, COALESCE(SUM(deposit_amount),0) as total_amount FROM fixed_deposits WHERE status = 'active'");
+$fd_stats = $active_fds_res ? $active_fds_res->fetch_assoc() : ['total' => 0, 'total_amount' => 0];
+$total_active_fds = $fd_stats['total'] ?? 0;
+$total_fd_corpus = $fd_stats['total_amount'] ?? 0;
+
+$pending_fds_res = $conn->query("SELECT COUNT(id) as total FROM fixed_deposits WHERE status = 'pending'");
+$pending_fds_count = $pending_fds_res ? $pending_fds_res->fetch_assoc()['total'] : 0;
+
 // Agent & Customer Counts
 $active_agents_result = $conn->query("SELECT COUNT(id) as total FROM agents WHERE is_active = TRUE");
 $active_agents = $active_agents_result->fetch_assoc()['total'] ?? 0;
@@ -205,6 +214,9 @@ $gold_collections = $gold_coll_res->fetch_assoc()['total'] ?? 0;
                                  <div class="col-lg-3 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">Total Loan Collections</h6><h2 class="text-success">₹<?php echo number_format($total_loan_collections); ?></h2></div></div>
                                  <div class="col-lg-3 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">Total RD Collections</h6><h2 class="text-success">₹<?php echo number_format($total_rd_collections); ?></h2></div></div>
                                  <div class="col-lg-3 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">Active RDs</h6><h2><?php echo $total_active_rds; ?></h2></div></div>
+                                 <div class="col-lg-3 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">Active FDs</h6><h2 class="text-primary"><?php echo $total_active_fds; ?></h2></div></div>
+                                 <div class="col-lg-3 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">Total FD Corpus</h6><h2 class="text-primary">₹<?php echo number_format($total_fd_corpus); ?></h2></div></div>
+                                 <div class="col-lg-3 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">Pending FD Approvals</h6><h2 class="text-warning"><?php echo $pending_fds_count; ?></h2></div></div>
                                  <div class="col-lg-3 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">Total Agent Wallet Balance</h6><h2>₹<?php echo number_format($total_wallet_balance); ?></h2></div></div>
                                  <div class="col-lg-3 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">Active Agents</h6><h2><?php echo $active_agents; ?></h2></div></div>
                                  <div class="col-lg-3 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">Total Customers</h6><h2><?php echo $total_customers; ?></h2></div></div>

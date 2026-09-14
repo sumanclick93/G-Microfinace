@@ -1,0 +1,221 @@
+<?php
+include('config.php');
+date_default_timezone_set('Asia/Kolkata');
+
+if (!isset($_SESSION['admin_id'])) {
+    header("Location: index.php");
+    exit();
+}
+
+$status_filter = $_GET['status'] ?? 'all';
+$search_query = trim($_GET['search'] ?? '');
+
+$where_clauses = ["1=1"];
+$params = [];
+$types = "";
+
+if ($status_filter !== 'all' && in_array($status_filter, ['pending', 'active', 'matured', 'closed', 'rejected'])) {
+    $where_clauses[] = "fd.status = ?";
+    $params[] = $status_filter;
+    $types .= "s";
+}
+
+if (!empty($search_query)) {
+    $where_clauses[] = "(c.full_name LIKE ? OR c.phone_number LIKE ? OR fd.fd_number LIKE ? OR a.full_name LIKE ?)";
+    $like_str = "%" . $search_query . "%";
+    $params[] = $like_str;
+    $params[] = $like_str;
+    $params[] = $like_str;
+    $params[] = $like_str;
+    $types .= "ssss";
+}
+
+$where_sql = implode(" AND ", $where_clauses);
+
+$sql = "SELECT fd.*, c.full_name as customer_name, c.phone_number as customer_phone, a.full_name as agent_name 
+        FROM fixed_deposits fd 
+        JOIN customers c ON fd.customer_id = c.id 
+        LEFT JOIN agents a ON fd.agent_id = a.id 
+        WHERE $where_sql 
+        ORDER BY fd.id DESC";
+
+$stmt = $conn->prepare($sql);
+if (!empty($types)) {
+    $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$result = $stmt->get_result();
+
+// Stats summary for Admin
+$stats_stmt = $conn->query("SELECT 
+    COUNT(*) as total_count,
+    SUM(CASE WHEN status = 'active' THEN deposit_amount ELSE 0 END) as active_amount,
+    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count,
+    SUM(CASE WHEN status = 'matured' THEN 1 ELSE 0 END) as matured_count
+    FROM fixed_deposits");
+$stats = $stats_stmt->fetch_assoc();
+?>
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<?php include('head.php'); ?>
+<body>
+    <div class="page-wrapper compact-wrapper" id="pageWrapper">
+        <?php include('header.php'); ?>
+        <div class="page-body-wrapper">
+            <?php include('sidebaar.php'); ?>
+            <div class="page-body">
+                <div class="container-fluid">
+                    
+                    <div class="row mb-4">
+                        <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <h4 class="mb-1"><i class="ri-bank-line me-2"></i>Fixed Deposits (FD) - Super Admin</h4>
+                                <p class="text-muted mb-0">System-wide Fixed Deposit portfolio & management</p>
+                            </div>
+                            <a href="pending-fd-payments.php" class="btn btn-warning"><i class="ri-time-line me-1"></i> Pending FD Approvals (<?php echo $stats['pending_count'] ?? 0; ?>)</a>
+                        </div>
+                    </div>
+
+                    <?php if (isset($_SESSION['message'])) { echo $_SESSION['message']; unset($_SESSION['message']); } ?>
+
+                    <!-- Stats Cards -->
+                    <div class="row">
+                        <div class="col-xl-3 col-sm-6 mb-4">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body">
+                                    <h6 class="card-title mb-1 text-white-50">Total FD Accounts</h6>
+                                    <h3 class="mb-0 fw-bold"><?php echo number_format($stats['total_count'] ?? 0); ?></h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-3 col-sm-6 mb-4">
+                            <div class="card bg-success text-white">
+                                <div class="card-body">
+                                    <h6 class="card-title mb-1 text-white-50">Active FD Corpus</h6>
+                                    <h3 class="mb-0 fw-bold">₹<?php echo number_format($stats['active_amount'] ?? 0, 2); ?></h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-3 col-sm-6 mb-4">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body">
+                                    <h6 class="card-title mb-1 text-white-50">Pending Approvals</h6>
+                                    <h3 class="mb-0 fw-bold"><?php echo number_format($stats['pending_count'] ?? 0); ?></h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-3 col-sm-6 mb-4">
+                            <div class="card bg-info text-white">
+                                <div class="card-body">
+                                    <h6 class="card-title mb-1 text-white-50">Matured FDs</h6>
+                                    <h3 class="mb-0 fw-bold"><?php echo number_format($stats['matured_count'] ?? 0); ?></h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body">
+                                    <form method="GET" action="all-fds.php" class="row g-3">
+                                        <div class="col-md-5">
+                                            <input type="text" name="search" class="form-control" placeholder="Search Customer, Phone, Agent, or FD #" value="<?php echo htmlspecialchars($search_query); ?>">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <select name="status" class="form-select">
+                                                <option value="all" <?php if($status_filter == 'all') echo 'selected'; ?>>All Statuses</option>
+                                                <option value="pending" <?php if($status_filter == 'pending') echo 'selected'; ?>>Pending Approval</option>
+                                                <option value="active" <?php if($status_filter == 'active') echo 'selected'; ?>>Active</option>
+                                                <option value="matured" <?php if($status_filter == 'matured') echo 'selected'; ?>>Matured</option>
+                                                <option value="closed" <?php if($status_filter == 'closed') echo 'selected'; ?>>Closed</option>
+                                                <option value="rejected" <?php if($status_filter == 'rejected') echo 'selected'; ?>>Rejected</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <button type="submit" class="btn btn-secondary w-100"><i class="ri-search-line me-1"></i> Filter</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Table -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>FD Number</th>
+                                                    <th>Customer Name</th>
+                                                    <th>Agent</th>
+                                                    <th>Deposit Amount</th>
+                                                    <th>Interest Rate</th>
+                                                    <th>Tenure</th>
+                                                    <th>Maturity Amount</th>
+                                                    <th>Start Date</th>
+                                                    <th>Maturity Date</th>
+                                                    <th>Status</th>
+                                                    <th class="text-center">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php if ($result->num_rows > 0): ?>
+                                                    <?php while ($row = $result->fetch_assoc()): ?>
+                                                        <tr>
+                                                            <td class="fw-bold">
+                                                                <a href="admin-fd-details.php?id=<?php echo $row['id']; ?>" class="text-primary"><?php echo htmlspecialchars($row['fd_number']); ?></a>
+                                                            </td>
+                                                            <td>
+                                                                <div class="fw-bold"><?php echo htmlspecialchars($row['customer_name']); ?></div>
+                                                                <small class="text-muted"><?php echo htmlspecialchars($row['customer_phone']); ?></small>
+                                                            </td>
+                                                            <td><span class="badge bg-light text-dark"><?php echo htmlspecialchars($row['agent_name'] ?? 'Direct'); ?></span></td>
+                                                            <td class="fw-bold text-dark">₹<?php echo number_format($row['deposit_amount'], 2); ?></td>
+                                                            <td><span class="badge bg-light-primary text-primary"><?php echo $row['interest_rate']; ?>% p.a.</span></td>
+                                                            <td><?php echo $row['tenure']; ?> Months</td>
+                                                            <td class="fw-bold text-success">₹<?php echo number_format($row['maturity_amount'], 2); ?></td>
+                                                            <td><?php echo date('d M Y', strtotime($row['start_date'])); ?></td>
+                                                            <td><?php echo date('d M Y', strtotime($row['maturity_date'])); ?></td>
+                                                            <td>
+                                                                <?php
+                                                                $st = $row['status'];
+                                                                if ($st == 'active') echo '<span class="badge bg-success">Active</span>';
+                                                                elseif ($st == 'pending') echo '<span class="badge bg-warning text-dark">Pending</span>';
+                                                                elseif ($st == 'matured') echo '<span class="badge bg-info">Matured</span>';
+                                                                elseif ($st == 'closed') echo '<span class="badge bg-secondary">Closed</span>';
+                                                                else echo '<span class="badge bg-danger">Rejected</span>';
+                                                                ?>
+                                                            </td>
+                                                            <td class="text-center">
+                                                                <a href="admin-fd-details.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-outline-primary">
+                                                                    <i class="ri-eye-line"></i> Manage
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endwhile; ?>
+                                                <?php else: ?>
+                                                    <tr>
+                                                        <td colspan="11" class="text-center py-4 text-muted">No Fixed Deposit records found.</td>
+                                                    </tr>
+                                                <?php endif; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        <?php include('footer.php'); ?>
+    </div>
+</body>
+</html>

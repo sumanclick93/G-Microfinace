@@ -30,6 +30,12 @@ $total_collections = $total_collections_result->fetch_assoc()['total'] ?? 0;
 $total_rd_collected_result = $conn->query("SELECT SUM(amount_paid) as total FROM rd_payments WHERE collected_by_agent_id = $agent_id");
 $total_rd_collections = $total_rd_collected_result->fetch_assoc()['total'] ?? 0;
 
+// My Active FDs & Corpus
+$active_fds_res = $conn->query("SELECT COUNT(id) as total_count, COALESCE(SUM(deposit_amount),0) as total_amount FROM fixed_deposits WHERE agent_id = $agent_id AND status = 'active'");
+$fd_stats = $active_fds_res ? $active_fds_res->fetch_assoc() : ['total_count' => 0, 'total_amount' => 0];
+$total_active_fds = $fd_stats['total_count'] ?? 0;
+$total_fd_amount = $fd_stats['total_amount'] ?? 0;
+
 // My Total Collections (Loan + RD)
 $my_total_collections = $total_collections + $total_rd_collections;
 
@@ -200,6 +206,8 @@ $gold_collections = $gold_coll_res->fetch_assoc()['total'] ?? 0;
                                 <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Total Customers</h6><h2><?php echo $total_customers; ?></h2></div></div>
                                 <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Active Loans</h6><h2><?php echo $active_loans_count; ?></h2></div></div>
                                 <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Active RDs</h6><h2><?php echo $total_active_rds; ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Active FDs</h6><h2 class="text-primary"><?php echo $total_active_fds; ?></h2></div></div>
+                                <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My FD Corpus</h6><h2 class="text-primary">₹<?php echo number_format($total_fd_amount); ?></h2></div></div>
                                 <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Loan Collections</h6><h2>₹<?php echo number_format($total_collections); ?></h2></div></div>
                                 <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My RD Collections</h6><h2>₹<?php echo number_format($total_rd_collections); ?></h2></div></div>
                                 <div class="col-lg-4 col-md-6"><div class="card card-body text-center h-100 shadow-sm border-0"><h6 class="text-muted">My Total Collections</h6><h2 class="text-success">₹<?php echo number_format($my_total_collections); ?></h2></div></div>

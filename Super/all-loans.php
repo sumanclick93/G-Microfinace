@@ -310,8 +310,12 @@ if ($filter_applied) {
                                                              <?php endif; ?>
                                                              <td><strong><?php
                                                                 $status_clean = strtolower(trim($loan['status']));
-                                                                $display_emis = in_array($status_clean, ['closed', 'paid']) ? $loan['tenure'] : $loan['paid_emis'];
-                                                                echo $display_emis . ' / ' . $loan['tenure'];
+                                                                if (($loan['interest_calculation_type'] ?? '') === 'monthly_interest_only') {
+                                                                    echo $loan['paid_emis'] . ' Paid (Monthly)';
+                                                                } else {
+                                                                    $display_emis = in_array($status_clean, ['closed', 'paid']) ? $loan['tenure'] : $loan['paid_emis'];
+                                                                    echo $display_emis . ' / ' . $loan['tenure'];
+                                                                }
                                                              ?></strong></td>
                                                              <td><?php echo date('d M, Y', strtotime($loan['application_date'])); ?></td>
                                                             <td>

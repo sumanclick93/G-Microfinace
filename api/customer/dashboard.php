@@ -153,6 +153,22 @@ if (isset($_SESSION['customer_id'])) {
              }
         }
 
+        // -- FD Data --
+        $active_fds_count = 0;
+        $total_fd_deposited = 0;
+        $total_fd_maturity_amount = 0;
+
+        $stmt_fds = $conn->prepare("SELECT id, deposit_amount, maturity_amount FROM fixed_deposits WHERE customer_id = ? AND status = 'active'");
+        $stmt_fds->bind_param("i", $customer_id);
+        $stmt_fds->execute();
+        $res_fds = $stmt_fds->get_result();
+        while ($fd_row = $res_fds->fetch_assoc()) {
+            $active_fds_count++;
+            $total_fd_deposited += (float)$fd_row['deposit_amount'];
+            $total_fd_maturity_amount += (float)$fd_row['maturity_amount'];
+        }
+        $stmt_fds->close();
+
         // --- 3. Format Success Response ---
         $response['status'] = 'success';
         $response['data'] = [
@@ -168,7 +184,12 @@ if (isset($_SESSION['customer_id'])) {
                 'total_principal_due' => round($total_rd_principal_due, 2),
                 'total_deposited' => round($total_rd_deposited, 2)
             ],
-            'next_rd_payments' => $next_rd_payments
+            'next_rd_payments' => $next_rd_payments,
+            'fd_summary' => [
+                'active_count' => $active_fds_count,
+                'total_deposited' => round($total_fd_deposited, 2),
+                'total_maturity_amount' => round($total_fd_maturity_amount, 2)
+            ]
         ];
         unset($response['message']);
 

@@ -95,6 +95,18 @@
                         </a>
                     </li>
                     <li class="sidebar-list">
+                        <a class="sidebar-link sidebar-title link-nav" href="apply-fd.php">
+                            <i data-feather="shield"></i>
+                            <span>Apply for FD</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-list">
+                        <a class="sidebar-link sidebar-title link-nav" href="all-fds.php">
+                            <i data-feather="database"></i>
+                            <span>All FDs</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-list">
                         <a class="sidebar-link sidebar-title link-nav" href="agent-collections.php">
                             <i class="ri-file-chart-line"></i>
                             <span>Banking</span>

@@ -757,6 +757,11 @@ $rd_pay_res->close();
                                                                         </a>
                                                                     </li>
                                                                     <li>
+                                                                        <a href="customer-fds.php?id=<?php echo $customer['id']; ?>" title="View Fixed Deposits (FDs)">
+                                                                            <i class="ri-bank-line" style="color: #6f42c1;"></i> 
+                                                                        </a>
+                                                                    </li>
+                                                                    <li>
                                                                         <a href="customer-loans.php?id=<?php echo $customer['id']; ?>" title="View Loans">
                                                                             <i class="ri-money-dollar-box-line" style="color: #28a745;"></i>
                                                                         </a>

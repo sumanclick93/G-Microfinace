@@ -122,6 +122,17 @@
                         </a>
                     </li>
                     <li class="sidebar-list-item">
+                        <a class="sidebar-link" href="all-fds.php">
+                            <i data-feather="shield"></i> <span>All FDs</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-list">
+                        <a class="sidebar-link sidebar-title link-nav" href="pending-fd-payments.php">
+                            <i data-feather="time"></i>
+                            <span>Pending FD Payments</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-list-item">
                         <a class="sidebar-link" href="settings.php">
                             <i data-feather="sliders"></i>
                             <span>System Settings</span>

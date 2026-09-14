@@ -1,0 +1,233 @@
+<?php
+header('Content-Type: application/json');
+
+$configPath = 'config.php';
+if (!file_exists($configPath)) {
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Server configuration error: Config file not found.']);
+    exit();
+}
+include($configPath);
+
+if (!isset($conn) || !$conn instanceof mysqli) {
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Database connection failed.']);
+    exit();
+}
+
+$response = ['status' => 'error', 'message' => 'Authentication required.'];
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (isset($_SESSION['customer_id'])) {
+    $customer_id = (int)$_SESSION['customer_id'];
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $loan_type = isset($_POST['loan_type']) ? trim($_POST['loan_type']) : 'standard';
+        $loan_amount = isset($_POST['loan_amount']) ? (float)$_POST['loan_amount'] : 0;
+        $interest_rate = isset($_POST['interest_rate']) ? (float)$_POST['interest_rate'] : 0;
+        $tenure = isset($_POST['tenure']) ? (int)$_POST['tenure'] : 0;
+        $repayment_cycle = isset($_POST['repayment_cycle']) ? trim($_POST['repayment_cycle']) : 'monthly';
+        $start_date = isset($_POST['start_date']) ? trim($_POST['start_date']) : date('Y-m-d');
+
+        if (!in_array($loan_type, ['standard', 'interest_only', 'gold'])) {
+            $loan_type = 'standard';
+        }
+
+        $interest_calculation_type = ($loan_type === 'interest_only' || $loan_type === 'gold') ? 'monthly_interest_only' : 'flat_total';
+
+        // Fetch customer's assigned agent_id
+        $agent_id = 0;
+        $stmt_cust = $conn->prepare("SELECT agent_id FROM customers WHERE id = ?");
+        $stmt_cust->bind_param("i", $customer_id);
+        $stmt_cust->execute();
+        $res_cust = $stmt_cust->get_result();
+        if ($res_cust && $row_cust = $res_cust->fetch_assoc()) {
+            $agent_id = (int)$row_cust['agent_id'];
+        }
+        $stmt_cust->close();
+
+        if ($agent_id <= 0) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'No active agent assigned to your account.']);
+            exit();
+        }
+
+        $gold_rate_per_gram = (float)get_system_setting($conn, 'gold_rate_per_gram', '5500.00');
+        $processing_fee_percent = (float)get_system_setting($conn, 'gold_loan_processing_fee_percent', '1.50');
+
+        $gold_weight_grams = null;
+        $gold_photo_path = null;
+        $gold_rate_applied = null;
+        $processing_fee = 0.00;
+
+        if ($loan_type === 'gold') {
+            $gold_weight_grams = isset($_POST['gold_weight_grams']) ? (float)$_POST['gold_weight_grams'] : 0;
+            $gold_rate_applied = $gold_rate_per_gram;
+            $processing_fee = round(($loan_amount * $processing_fee_percent) / 100, 2);
+
+            $gold_valuation = $gold_weight_grams * $gold_rate_applied;
+
+            if ($gold_weight_grams <= 0) {
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Gold weight in grams is required for Gold Loan.']);
+                exit();
+            }
+
+            if ($loan_amount > $gold_valuation) {
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Requested loan amount exceeds gold collateral valuation (₹' . number_format($gold_valuation, 2) . ').']);
+                exit();
+            }
+
+            $file_items = [];
+            foreach (['gold_photo', 'gold_photo_path', 'gold_photo_file'] as $f_key) {
+                if (isset($_FILES[$f_key])) {
+                    $f_obj = $_FILES[$f_key];
+                    if (is_array($f_obj['name'])) {
+                        foreach ($f_obj['name'] as $idx => $fname) {
+                            if (!empty($fname)) {
+                                $file_items[] = [
+                                    'name' => $f_obj['name'][$idx],
+                                    'tmp_name' => $f_obj['tmp_name'][$idx],
+                                    'error' => $f_obj['error'][$idx],
+                                ];
+                            }
+                        }
+                    } elseif (!empty($f_obj['name'])) {
+                        $file_items[] = [
+                            'name' => $f_obj['name'],
+                            'tmp_name' => $f_obj['tmp_name'],
+                            'error' => $f_obj['error'],
+                        ];
+                    }
+                }
+            }
+
+            $uploaded_photos = [];
+            $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'];
+            $candidate_dirs = [
+                __DIR__ . '/../../Agents/upload/gold_collateral/',
+                __DIR__ . '/../../Agents/uploads/gold_collateral/',
+                __DIR__ . '/../../Agents/upload/',
+                __DIR__ . '/../../Agents/uploads/'
+            ];
+
+            foreach ($file_items as $item) {
+                if ($item['error'] === UPLOAD_ERR_OK) {
+                    $ext = strtolower(pathinfo($item['name'], PATHINFO_EXTENSION));
+                    if (in_array($ext, $allowed_exts)) {
+                        $new_filename = 'gold_api_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+                        $saved_rel = null;
+                        $saved_abs = null;
+
+                        foreach ($candidate_dirs as $cdir) {
+                            if (!is_dir($cdir)) @mkdir($cdir, 0755, true);
+                            @chmod($cdir, 0755);
+                            $dest = $cdir . $new_filename;
+                            if (move_uploaded_file($item['tmp_name'], $dest)) {
+                                $saved_abs = $dest;
+                                if (strpos($cdir, 'upload/gold_collateral') !== false) {
+                                    $saved_rel = 'upload/gold_collateral/' . $new_filename;
+                                } elseif (strpos($cdir, 'uploads/gold_collateral') !== false) {
+                                    $saved_rel = 'uploads/gold_collateral/' . $new_filename;
+                                } elseif (strpos($cdir, 'upload/') !== false) {
+                                    $saved_rel = 'upload/' . $new_filename;
+                                } else {
+                                    $saved_rel = 'uploads/' . $new_filename;
+                                }
+                                break;
+                            }
+                        }
+
+                        if ($saved_abs && $saved_rel) {
+                            foreach ($candidate_dirs as $alt_cdir) {
+                                if (!is_dir($alt_cdir)) @mkdir($alt_cdir, 0755, true);
+                                @chmod($alt_cdir, 0755);
+                                $alt_dest = $alt_cdir . $new_filename;
+                                if (!file_exists($alt_dest)) @copy($saved_abs, $alt_dest);
+                            }
+                            $uploaded_photos[] = $saved_rel;
+                        }
+                    }
+                }
+            }
+
+            if (!empty($uploaded_photos)) {
+                $gold_photo_path = implode(',', $uploaded_photos);
+            } else {
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Gold collateral photo upload is required.']);
+                exit();
+            }
+        }
+
+        if ($loan_amount <= 0 || ($loan_type === 'standard' && $tenure <= 0) || $interest_rate < 0) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Invalid loan parameters provided.']);
+            exit();
+        }
+
+        // Calculations
+        if ($interest_calculation_type === 'monthly_interest_only') {
+            $tenure = 0;
+            $monthly_installment = round($loan_amount * ($interest_rate / 100), 2);
+            $total_repayable_amount = round($loan_amount, 2);
+        } else {
+            $total_repayable_amount = round($loan_amount * (1 + ($interest_rate / 100)), 2);
+            $monthly_installment = round($total_repayable_amount / max(1, $tenure), 2);
+        }
+
+        date_default_timezone_set('Asia/Kolkata');
+        $application_date = date('Y-m-d H:i:s');
+
+        $sql = "INSERT INTO loans (
+                    customer_id, agent_id, loan_type, interest_calculation_type,
+                    loan_amount, interest_rate, tenure, repayment_cycle,
+                    total_repayable_amount, monthly_installment, gold_weight_grams,
+                    gold_photo_path, gold_rate_per_gram, processing_fee,
+                    status, application_date, approval_date, loan_start_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, ?)";
+
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param(
+            "iissddissddsddss",
+            $customer_id, $agent_id, $loan_type, $interest_calculation_type,
+            $loan_amount, $interest_rate, $tenure, $repayment_cycle,
+            $total_repayable_amount, $monthly_installment, $gold_weight_grams,
+            $gold_photo_path, $gold_rate_applied, $processing_fee,
+            $application_date, $start_date
+        );
+
+        if ($stmt->execute()) {
+            $new_loan_id = $stmt->insert_id;
+            $response['status'] = 'success';
+            $response['message'] = 'Loan application submitted successfully.';
+            $response['data'] = [
+                'loan_id' => $new_loan_id,
+                'loan_type' => $loan_type,
+                'loan_amount' => $loan_amount,
+                'total_repayable_amount' => $total_repayable_amount,
+                'monthly_installment' => $monthly_installment,
+                'processing_fee' => $processing_fee,
+                'status' => 'pending'
+            ];
+        } else {
+            http_response_code(500);
+            $response['message'] = 'Database insertion error: ' . $stmt->error;
+        }
+        $stmt->close();
+    } else {
+        http_response_code(405);
+        $response['message'] = 'Only POST request method allowed.';
+    }
+} else {
+    http_response_code(401);
+    $response['message'] = 'Authentication required. Please login.';
+}
+
+echo json_encode($response);
+$conn->close();
+?>

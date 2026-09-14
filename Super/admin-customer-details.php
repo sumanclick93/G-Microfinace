@@ -100,6 +100,19 @@ if ($loan_result->num_rows > 0) {
 }
 $stmt_loans->close();
 
+// 5b. Fetch All Fixed Deposits for this Customer
+$customer_fds = [];
+$stmt_fds = $conn->prepare("SELECT * FROM fixed_deposits WHERE customer_id = ? ORDER BY id DESC");
+$stmt_fds->bind_param("i", $customer_id);
+$stmt_fds->execute();
+$fds_result = $stmt_fds->get_result();
+if ($fds_result->num_rows > 0) {
+    while ($row = $fds_result->fetch_assoc()) {
+        $customer_fds[] = $row;
+    }
+}
+$stmt_fds->close();
+
 // 6. Fetch all agents for the reassign dropdown
 $all_agents = [];
 $agent_result = $conn->query("SELECT id, first_name, last_name FROM agents ORDER BY first_name ASC");
@@ -224,6 +237,57 @@ if ($agent_result->num_rows > 0) {
                                                             <td><span class="badge bg-info"><?php echo ucfirst($loan['status']); ?></span></td>
                                                             <td>
                                                                 <a href="admin-loan-details.php?id=<?php echo $loan['id']; ?>" title="View Loan Details">
+                                                                    <i class="ri-eye-line"></i>
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card card-table mt-4">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="ri-bank-line me-1"></i> Fixed Deposit (FD) History</h5>
+                                    <div class="table-responsive">
+                                        <table class="table align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th>FD Number</th>
+                                                    <th>Deposit Amount</th>
+                                                    <th>Interest Rate</th>
+                                                    <th>Tenure</th>
+                                                    <th>Maturity Amount</th>
+                                                    <th>Status</th>
+                                                    <th>Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php if (empty($customer_fds)) : ?>
+                                                    <tr><td colspan="7" class="text-center text-muted py-3">No Fixed Deposit accounts found for this customer.</td></tr>
+                                                <?php else : ?>
+                                                    <?php foreach ($customer_fds as $fd) : ?>
+                                                        <tr>
+                                                            <td class="fw-bold"><?php echo htmlspecialchars($fd['fd_number']); ?></td>
+                                                            <td class="fw-bold">₹<?php echo number_format($fd['deposit_amount'], 2); ?></td>
+                                                            <td><?php echo $fd['interest_rate']; ?>% p.a.</td>
+                                                            <td><?php echo $fd['tenure']; ?> Months</td>
+                                                            <td class="text-success fw-bold">₹<?php echo number_format($fd['maturity_amount'], 2); ?></td>
+                                                            <td>
+                                                                <?php
+                                                                $st = $fd['status'];
+                                                                if ($st == 'active') echo '<span class="badge bg-success">Active</span>';
+                                                                elseif ($st == 'pending') echo '<span class="badge bg-warning text-dark">Pending</span>';
+                                                                elseif ($st == 'matured') echo '<span class="badge bg-info">Matured</span>';
+                                                                elseif ($st == 'closed') echo '<span class="badge bg-secondary">Closed</span>';
+                                                                else echo '<span class="badge bg-danger">Rejected</span>';
+                                                                ?>
+                                                            </td>
+                                                            <td>
+                                                                <a href="admin-fd-details.php?id=<?php echo $fd['id']; ?>" class="btn btn-sm btn-outline-primary" title="View FD Details">
                                                                     <i class="ri-eye-line"></i>
                                                                 </a>
                                                             </td>

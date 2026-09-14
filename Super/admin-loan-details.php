@@ -331,6 +331,46 @@ if (!$is_monthly_interest && $total_paid >= (float)$loan['total_repayable_amount
     $status_clean = 'paid';
 }
 
+$accrued_months = 0;
+$total_accrued_interest = 0.0;
+$pending_interest_due = 0.0;
+$pending_emis_count = 0;
+
+if ($is_monthly_interest) {
+    $m_inst = (float)$loan['monthly_installment'];
+    if ($m_inst <= 0 && (float)$loan['loan_amount'] > 0 && (float)$loan['interest_rate'] > 0) {
+        $m_inst = round(((float)$loan['loan_amount'] * (float)$loan['interest_rate']) / 100, 2);
+    }
+    
+    $start_date_val = !empty($loan['loan_start_date']) ? $loan['loan_start_date'] : (!empty($loan['approval_date']) ? $loan['approval_date'] : $loan['application_date']);
+    
+    if (!empty($start_date_val) && !in_array($status_clean, ['rejected', 'pending'])) {
+        $start_dt = new DateTime($start_date_val);
+        $today_dt = new DateTime();
+        
+        if ($today_dt >= $start_dt) {
+            $ys = (int)$start_dt->format('Y');
+            $ms = (int)$start_dt->format('m');
+            $yt = (int)$today_dt->format('Y');
+            $mt = (int)$today_dt->format('m');
+            
+            $accrued_months = ($yt - $ys) * 12 + ($mt - $ms) + 1;
+            if ($accrued_months < 0) $accrued_months = 0;
+        }
+    }
+    
+    if (in_array($status_clean, ['closed', 'paid'])) {
+        $pending_interest_due = 0.0;
+        $pending_emis_count = 0;
+        $total_accrued_interest = $total_paid;
+    } else {
+        $total_accrued_interest = $accrued_months * $m_inst;
+        $pending_interest_due = max(0, $total_accrued_interest - $total_paid);
+        $paid_months_calc = ($m_inst > 0) ? (int)floor($total_paid / $m_inst) : 0;
+        $pending_emis_count = max(0, $accrued_months - $paid_months_calc);
+    }
+}
+
 if (in_array($status_clean, ['closed', 'paid'])) {
     $progress_percentage = 100;
     $total_paid = max($total_paid, (float)$loan['total_repayable_amount']);
@@ -393,6 +433,19 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                          <?php endif; ?>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Total Repayable:</strong> ₹<?php echo number_format($loan['total_repayable_amount'], 2); ?></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong><?php echo $is_monthly_interest ? 'Monthly Interest:' : 'Installment:'; ?></strong> ₹<?php echo number_format($loan['monthly_installment'], 2); ?> <?php if($is_monthly_interest) echo '<small class="text-muted">(Monthly Interest Only)</small>'; ?></li>
+                                         <?php if ($is_monthly_interest): ?>
+                                             <li class="list-group-item d-flex justify-content-between text-warning">
+                                                 <strong>Accrued Interest (<?php echo $accrued_months; ?> Mo):</strong>
+                                                 <span>₹<?php echo number_format($total_accrued_interest, 2); ?></span>
+                                             </li>
+                                             <li class="list-group-item d-flex justify-content-between text-danger">
+                                                 <strong>Pending Interest Due:</strong>
+                                                 <span class="text-end">
+                                                     <strong class="text-danger">₹<?php echo number_format($pending_interest_due, 2); ?></strong>
+                                                     <small class="d-block text-muted">(<?php echo $pending_emis_count; ?> Pending EMI<?php echo $pending_emis_count == 1 ? '' : 's'; ?> @ ₹<?php echo number_format($loan['monthly_installment'], 2); ?>)</small>
+                                                 </span>
+                                             </li>
+                                         <?php endif; ?>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Tenure:</strong> <?php echo $is_monthly_interest ? 'Open-Ended (Monthly)' : ($loan['tenure'] . ' ' . ucfirst($loan['repayment_cycle']) . 's'); ?></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Payments Paid:</strong> <span><strong><?php echo $paid_emis_count; ?></strong> <?php echo $is_monthly_interest ? 'Payment(s)' : ('of ' . $loan['tenure']); ?></span></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Application Date:</strong> <span><?php echo !empty($loan['application_date']) ? date('d M Y, h:i A', strtotime($loan['application_date'])) : 'N/A'; ?></span></li>
@@ -533,16 +586,24 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                         </div>
 
                         <div class="col-lg-7">
-                           <div class="card">
+                             <div class="card">
                                 <div class="card-body">
                                      <h5 class="card-title">Payment Progress</h5>
                                      <div class="progress mb-3" style="height: 25px;">
                                         <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo $progress_percentage; ?>%;"><?php echo round($progress_percentage); ?>%</div>
                                      </div>
-                                     <div class="d-flex justify-content-between">
-                                        <span><strong><?php echo $is_monthly_interest ? 'Total Interest Paid:' : 'Paid:'; ?></strong> ₹<?php echo number_format($total_paid, 2); ?></span>
-                                        <span><strong><?php echo $is_monthly_interest ? 'Principal Outstanding:' : 'Total:'; ?></strong> ₹<?php echo number_format($is_monthly_interest ? $loan['loan_amount'] : $loan['total_repayable_amount'], 2); ?></span>
-                                     </div>
+                                     <ul class="list-group list-group-flush mb-0">
+                                         <?php if ($is_monthly_interest): ?>
+                                             <li class="list-group-item d-flex justify-content-between text-dark"><span><strong>Total Interest Accrued:</strong></span> <span>₹<?php echo number_format($total_accrued_interest, 2); ?> (<?php echo $accrued_months; ?> Month<?php echo $accrued_months == 1 ? '' : 's'; ?>)</span></li>
+                                             <li class="list-group-item d-flex justify-content-between text-success"><span><strong>Total Interest Paid:</strong></span> <span>₹<?php echo number_format($total_paid, 2); ?></span></li>
+                                             <li class="list-group-item d-flex justify-content-between text-danger"><span><strong>Pending Interest Due:</strong></span> <span><strong>₹<?php echo number_format($pending_interest_due, 2); ?></strong> (<?php echo $pending_emis_count; ?> Pending EMI<?php echo $pending_emis_count == 1 ? '' : 's'; ?>)</span></li>
+                                             <li class="list-group-item d-flex justify-content-between text-primary"><span><strong>Principal Outstanding:</strong></span> <span>₹<?php echo number_format($loan['loan_amount'], 2); ?></span></li>
+                                         <?php else: ?>
+                                             <li class="list-group-item d-flex justify-content-between text-success"><span><strong>Paid:</strong></span> <span>₹<?php echo number_format($total_paid, 2); ?></span></li>
+                                             <li class="list-group-item d-flex justify-content-between text-danger"><span><strong>Remaining Balance:</strong></span> <span>₹<?php echo number_format($remaining_balance, 2); ?></span></li>
+                                             <li class="list-group-item d-flex justify-content-between text-primary"><span><strong>Total Repayable:</strong></span> <span>₹<?php echo number_format($loan['total_repayable_amount'], 2); ?></span></li>
+                                         <?php endif; ?>
+                                     </ul>
                                 </div>
                             </div>
                             <div class="card card-table">
