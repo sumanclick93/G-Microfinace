@@ -1,41 +1,10 @@
 <?php
-// Set header for JSON response
-header('Content-Type: application/json');
+// Include database configuration & API helpers
+require_once('config.php');
 
-// --- START DEBUGGING ---
-// ini_set('display_errors', 1);
-// ini_set('display_startup_errors', 1);
-// error_reporting(E_ALL);
-// --- END DEBUGGING ---
+$customer_id = get_current_customer_id();
 
-// Include the database configuration (Using the correct relative path)
-$configPath = 'config.php';
-if (!file_exists($configPath)) {
-    http_response_code(500); 
-    echo json_encode(['status' => 'error', 'message' => 'Server configuration error: Config file not found.']);
-    exit();
-}
-include($configPath);
-
-if (!isset($conn) || !$conn instanceof mysqli) {
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Database connection failed.']);
-    exit();
-}
-
-// Response array
-$response = ['status' => 'error', 'message' => 'Authentication required.'];
-
-// Start session to check login state
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
-
-// --- 1. Authentication Check ---
-if (isset($_SESSION['customer_id'])) {
-    $customer_id = $_SESSION['customer_id'];
-
-    // --- 2. Prepare Query to fetch RDs for this customer (MODIFIED) ---
+if ($customer_id) {
     $sql = "SELECT
                 rd.id,
                 rd.deposit_amount,
@@ -56,58 +25,38 @@ if (isset($_SESSION['customer_id'])) {
     $stmt = $conn->prepare($sql);
     
     if ($stmt === false) {
-        http_response_code(500);
         error_log("SQL Prepare Error in get_all_rds.php: " . $conn->error);
-        $response['message'] = 'Database error preparing statement.';
-        echo json_encode($response);
-        $conn->close();
-        exit();
+        send_api_json_response(['status' => 'error', 'message' => 'Database error preparing statement.'], 500, $conn);
     }
 
     $stmt->bind_param("i", $customer_id);
 
-    // --- 3. Execute and Fetch Data (MODIFIED) ---
     $rds = [];
     if ($stmt->execute()) {
         $result = $stmt->get_result();
         while ($row = $result->fetch_assoc()) {
-            // Format data as needed for the app
             $row['deposit_amount'] = (float)$row['deposit_amount'];
             $row['interest_rate'] = (float)$row['interest_rate'];
             $row['maturity_amount'] = (float)$row['maturity_amount'];
-            
-            // Add the new keys
             $row['total_emi'] = (int)$row['tenure'];
             $row['no_of_paid_emi'] = (int)$row['no_of_paid_emi'];
-            
-            // Keep tenure_description
             $row['tenure_description'] = $row['tenure'] . ' ' . ucfirst($row['repayment_cycle']) . ' Deposits';
             $row['status_formatted'] = ucwords(str_replace('-', ' ', $row['status']));
-
-            // ** MODIFICATION: Only unset tenure, keep repayment_cycle **
             unset($row['tenure']);
 
             $rds[] = $row;
         }
 
-        $response['status'] = 'success';
-        $response['data'] = $rds;
-        unset($response['message']); // Remove default error message
+        $stmt->close();
+        send_api_json_response(['status' => 'success', 'data' => $rds], 200, $conn);
 
     } else {
-        http_response_code(500);
         error_log("SQL Execute Error in get_all_rds.php: " . $stmt->error);
-        $response['message'] = 'Database error fetching recurring deposits: ' . $stmt->error;
+        $stmt->close();
+        send_api_json_response(['status' => 'error', 'message' => 'Database error fetching recurring deposits: ' . $stmt->error], 500, $conn);
     }
-    $stmt->close();
 
 } else {
-    // Session ID not found, user is not logged in
-     http_response_code(401); // Unauthorized status code
-     $response['message'] = 'Authentication required. Please login.';
+    send_api_json_response(['status' => 'error', 'message' => 'Authentication required. Please login.'], 401, $conn);
 }
-
-// --- 4. Send JSON Response ---
-echo json_encode($response);
-$conn->close();
 ?>

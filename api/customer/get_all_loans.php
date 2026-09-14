@@ -1,43 +1,16 @@
 <?php
-// --- START DEBUGGING ---
-// ini_set('display_errors', 1);
-// ini_set('display_startup_errors', 1);
-// error_reporting(E_ALL);
-// --- END DEBUGGING ---
+// Include database configuration & API helpers
+require_once('config.php');
 
-// Set header for JSON response
-header('Content-Type: application/json');
+$customer_id = get_current_customer_id();
 
-// --- 1. Include Configuration ---
-$configPath = 'config.php';
-if (!file_exists($configPath)) {
-    http_response_code(500); 
-    echo json_encode(['status' => 'error', 'message' => 'Server configuration error: Config file not found at ' . $configPath]);
-    exit();
-}
-include($configPath);
-
-if (!isset($conn) || !$conn instanceof mysqli) {
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Database connection failed. Check config.php.']);
-    exit();
-}
-
-// --- 2. Start Session & Authentication ---
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
-
-$response = ['status' => 'error', 'message' => 'Authentication required.'];
-
-if (isset($_SESSION['customer_id'])) {
-    $customer_id = $_SESSION['customer_id'];
-
-    // --- 3. Prepare Query (MODIFIED) ---
-    // Re-added l.repayment_cycle to the SELECT statement
+if ($customer_id) {
+    // --- 3. Prepare Query ---
     $sql = "SELECT
                 l.id,
                 l.loan_amount,
+                l.interest_rate,
+                l.monthly_installment,
                 l.total_repayable_amount,
                 l.status,
                 l.application_date,
@@ -51,7 +24,8 @@ if (isset($_SESSION['customer_id'])) {
                 l.gold_photo_path,
                 l.gold_rate_per_gram,
                 l.processing_fee,
-                COUNT(p.id) AS no_of_paid_emi
+                COUNT(p.id) AS no_of_paid_emi,
+                SUM(p.amount_paid) AS total_paid
             FROM loans l
             LEFT JOIN payments p ON l.id = p.loan_id
             WHERE l.customer_id = ?
@@ -61,12 +35,8 @@ if (isset($_SESSION['customer_id'])) {
     $stmt = $conn->prepare($sql);
 
     if ($stmt === false) {
-        http_response_code(500);
         error_log("SQL Prepare Error in get_all_loans.php: " . $conn->error);
-        $response['message'] = 'Database error preparing statement.';
-        echo json_encode($response);
-        $conn->close();
-        exit();
+        send_api_json_response(['status' => 'error', 'message' => 'Database error preparing statement.'], 500, $conn);
     }
 
     $stmt->bind_param("i", $customer_id);
@@ -78,6 +48,8 @@ if (isset($_SESSION['customer_id'])) {
         while ($row = $result->fetch_assoc()) {
             // Format data
             $row['loan_amount'] = (float)$row['loan_amount'];
+            $row['interest_rate'] = (float)($row['interest_rate'] ?? 0);
+            $row['monthly_installment'] = (float)($row['monthly_installment'] ?? 0);
             $row['total_repayable_amount'] = (float)$row['total_repayable_amount'];
             $row['loan_type'] = $row['loan_type'] ?? 'standard';
             $row['interest_calculation_type'] = $row['interest_calculation_type'] ?? 'flat_total';
@@ -192,25 +164,16 @@ if (isset($_SESSION['customer_id'])) {
             $loans[] = $row;
         }
 
-        $response['status'] = 'success';
-        $response['data'] = $loans;
-        unset($response['message']);
+        $stmt->close();
+        send_api_json_response(['status' => 'success', 'data' => $loans], 200, $conn);
 
     } else {
-        http_response_code(500);
         error_log("SQL Execute Error in get_all_loans.php: " . $stmt->error);
-        $response['message'] = 'Database error fetching loans.';
+        $stmt->close();
+        send_api_json_response(['status' => 'error', 'message' => 'Database error fetching loans.'], 500, $conn);
     }
-    $stmt->close();
 
 } else {
-     http_response_code(401); // Unauthorized status code
-     $response['message'] = 'Authentication required. Please login.';
+    send_api_json_response(['status' => 'error', 'message' => 'Authentication required. Please login.'], 401, $conn);
 }
-
-// --- 5. Send JSON Response ---
-echo json_encode($response);
-
-// Close connection
-$conn->close();
 ?>

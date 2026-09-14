@@ -1,29 +1,10 @@
 <?php
-header('Content-Type: application/json');
+// Include database configuration & API helpers
+require_once('config.php');
 
-$configPath = 'config.php';
-if (!file_exists($configPath)) {
-    http_response_code(500); 
-    echo json_encode(['status' => 'error', 'message' => 'Server configuration error: Config file not found.']);
-    exit();
-}
-include($configPath);
+$customer_id = get_current_customer_id();
 
-if (!isset($conn) || !$conn instanceof mysqli) {
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Database connection failed.']);
-    exit();
-}
-
-$response = ['status' => 'error', 'message' => 'Authentication required.'];
-
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
-
-if (isset($_SESSION['customer_id'])) {
-    $customer_id = (int)$_SESSION['customer_id'];
-
+if ($customer_id) {
     $sql = "SELECT 
                 fd.id,
                 fd.fd_number,
@@ -57,24 +38,16 @@ if (isset($_SESSION['customer_id'])) {
                 $fds[] = $row;
             }
 
-            $response = [
-                'status' => 'success',
-                'data' => $fds
-            ];
+            $stmt->close();
+            send_api_json_response(['status' => 'success', 'data' => $fds], 200, $conn);
         } else {
-            http_response_code(500);
-            $response['message'] = 'Database error fetching Fixed Deposits: ' . $stmt->error;
+            $stmt->close();
+            send_api_json_response(['status' => 'error', 'message' => 'Database error fetching Fixed Deposits: ' . $stmt->error], 500, $conn);
         }
-        $stmt->close();
     } else {
-        http_response_code(500);
-        $response['message'] = 'Database query preparation error.';
+        send_api_json_response(['status' => 'error', 'message' => 'Database query preparation error.'], 500, $conn);
     }
 } else {
-    http_response_code(401);
-    $response['message'] = 'Authentication required. Please login.';
+    send_api_json_response(['status' => 'error', 'message' => 'Authentication required. Please login.'], 401, $conn);
 }
-
-echo json_encode($response);
-$conn->close();
 ?>

@@ -1,21 +1,11 @@
 <?php
-// Set header for JSON response
-header('Content-Type: application/json');
-
-// Include the database configuration
-include('../../Super/config.php');
-
-// Response array
-$response = ['status' => 'error', 'message' => 'Authentication required.'];
-
-// Start session to check login state
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
+// Include database configuration & API helpers
+require_once('config.php');
 
 // --- 1. Authentication Check ---
-if (isset($_SESSION['customer_id'])) {
-    $customer_id = $_SESSION['customer_id'];
+$customer_id = get_current_customer_id();
+
+if ($customer_id) {
     $today = new DateTime(); // Today's date for comparison
     $today->setTime(0, 0, 0); // Set time to midnight for accurate date comparisons
 
@@ -70,7 +60,7 @@ if (isset($_SESSION['customer_id'])) {
         $stmt_loans->close();
 
         // Sort upcoming payments by date
-        usort($next_loan_payments, function($a, $b) { /* ... sorting logic ... */ return ($a['due_date'] < $b['due_date']) ? -1 : 1; });
+        usort($next_loan_payments, function($a, $b) { return ($a['due_date'] < $b['due_date']) ? -1 : 1; });
 
         // Get total paid for active loans
         if (!empty($active_loan_ids)) {
@@ -102,7 +92,6 @@ if (isset($_SESSION['customer_id'])) {
         while ($rd = $result_rds->fetch_assoc()) {
             $active_rds_count++;
             $active_rd_ids[] = $rd['id'];
-            // ## ADDED: Calculate total principal due for all active RDs ##
             $total_rd_principal_due += ((float)$rd['deposit_amount'] * (int)$rd['tenure']);
 
              // --- Calculate next theoretical due date for this RD ---
@@ -137,7 +126,7 @@ if (isset($_SESSION['customer_id'])) {
         $stmt_rds->close();
 
         // Sort upcoming RD payments by date
-        usort($next_rd_payments, function($a, $b) { /* ... sorting logic ... */ return ($a['due_date'] < $b['due_date']) ? -1 : 1; });
+        usort($next_rd_payments, function($a, $b) { return ($a['due_date'] < $b['due_date']) ? -1 : 1; });
 
         // Get total paid for active RDs
         if (!empty($active_rd_ids)) {
@@ -170,41 +159,38 @@ if (isset($_SESSION['customer_id'])) {
         $stmt_fds->close();
 
         // --- 3. Format Success Response ---
-        $response['status'] = 'success';
-        $response['data'] = [
-            'loan_summary' => [
-                'active_count' => $active_loans_count,
-                'total_repayable' => round($total_loan_repayable, 2),
-                'total_paid' => round($total_loan_paid, 2),
-                'total_outstanding' => round($total_outstanding_loan, 2)
-            ],
-            'next_loan_payments' => $next_loan_payments,
-            'rd_summary' => [
-                'active_count' => $active_rds_count,
-                'total_principal_due' => round($total_rd_principal_due, 2),
-                'total_deposited' => round($total_rd_deposited, 2)
-            ],
-            'next_rd_payments' => $next_rd_payments,
-            'fd_summary' => [
-                'active_count' => $active_fds_count,
-                'total_deposited' => round($total_fd_deposited, 2),
-                'total_maturity_amount' => round($total_fd_maturity_amount, 2)
+        $response = [
+            'status' => 'success',
+            'data' => [
+                'loan_summary' => [
+                    'active_count' => $active_loans_count,
+                    'total_repayable' => round($total_loan_repayable, 2),
+                    'total_paid' => round($total_loan_paid, 2),
+                    'total_outstanding' => round($total_outstanding_loan, 2)
+                ],
+                'next_loan_payments' => $next_loan_payments,
+                'rd_summary' => [
+                    'active_count' => $active_rds_count,
+                    'total_principal_due' => round($total_rd_principal_due, 2),
+                    'total_deposited' => round($total_rd_deposited, 2)
+                ],
+                'next_rd_payments' => $next_rd_payments,
+                'fd_summary' => [
+                    'active_count' => $active_fds_count,
+                    'total_deposited' => round($total_fd_deposited, 2),
+                    'total_maturity_amount' => round($total_fd_maturity_amount, 2)
+                ]
             ]
         ];
-        unset($response['message']);
+
+        send_api_json_response($response, 200, $conn);
 
     } catch (Exception $e) {
-        http_response_code(500);
         error_log("Error in dashboard API: " . $e->getMessage());
-        $response['message'] = 'Error fetching dashboard data.';
+        send_api_json_response(['status' => 'error', 'message' => 'Error fetching dashboard data.'], 500, $conn);
     }
 
 } else {
-    http_response_code(401);
-    $response['message'] = 'Authentication required. Please login.';
+    send_api_json_response(['status' => 'error', 'message' => 'Authentication required. Please login.'], 401, $conn);
 }
-
-// --- 4. Send JSON Response ---
-echo json_encode($response);
-$conn->close();
 ?>

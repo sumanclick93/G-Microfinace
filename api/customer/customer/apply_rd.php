@@ -1,178 +1,147 @@
 <?php
-header('Content-Type: application/json');
-
-$configPath = 'config.php';
-if (!file_exists($configPath)) {
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Server configuration error: Config file not found.']);
-    exit();
-}
-include($configPath);
+require_once __DIR__ . '/config.php';
 
 if (!isset($conn) || !$conn instanceof mysqli) {
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Database connection failed.']);
-    exit();
+    send_api_json_response(['status' => 'error', 'message' => 'Database connection failed.'], 500);
 }
 
-$response = ['status' => 'error', 'message' => 'Authentication required.'];
+$customer_id = get_current_customer_id();
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+if (!$customer_id) {
+    send_api_json_response(['status' => 'error', 'message' => 'Authentication required.'], 401);
 }
 
-// Session auth or optional POST customer_id fallback
-$customer_id = null;
-if (isset($_SESSION['customer_id'])) {
-    $customer_id = (int) $_SESSION['customer_id'];
-} elseif (isset($_POST['customer_id']) && is_numeric($_POST['customer_id'])) {
-    $customer_id = (int) $_POST['customer_id'];
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    send_api_json_response(['status' => 'error', 'message' => 'Only POST request method allowed.'], 405);
 }
 
-if ($customer_id) {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $deposit_amount = isset($_POST['deposit_amount']) ? (float) $_POST['deposit_amount'] : 0;
-        $repayment_cycle = isset($_POST['repayment_cycle']) ? strtolower(trim($_POST['repayment_cycle'])) : 'monthly';
-        $tenure = isset($_POST['tenure']) ? (int) $_POST['tenure'] : 0;
-        $interest_rate = isset($_POST['interest_rate']) ? (float) $_POST['interest_rate'] : 0;
-        $start_date = isset($_POST['start_date']) && !empty($_POST['start_date']) ? trim($_POST['start_date']) : date('Y-m-d');
+// Support both JSON input and $_POST
+$input_data = json_decode(file_get_contents('php://input'), true);
+if (!is_array($input_data)) {
+    $input_data = $_POST;
+}
 
-        $allowed_cycles = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'annually'];
-        if (!in_array($repayment_cycle, $allowed_cycles)) {
-            $repayment_cycle = 'monthly';
-        }
+$deposit_amount = isset($input_data['deposit_amount']) ? (float)$input_data['deposit_amount'] : 0;
+$repayment_cycle = isset($input_data['repayment_cycle']) ? strtolower(trim($input_data['repayment_cycle'])) : 'monthly';
+$tenure = isset($input_data['tenure']) ? (int)$input_data['tenure'] : 0;
+$interest_rate = isset($input_data['interest_rate']) ? (float)$input_data['interest_rate'] : 0;
+$start_date = isset($input_data['start_date']) && !empty($input_data['start_date']) ? trim($input_data['start_date']) : date('Y-m-d');
 
-        if ($deposit_amount <= 0 || $tenure <= 0 || $interest_rate < 0) {
-            http_response_code(400);
-            echo json_encode(['status' => 'error', 'message' => 'Invalid RD parameters provided. Installment amount and tenure must be positive.']);
-            exit();
-        }
+$allowed_cycles = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'annually'];
+if (!in_array($repayment_cycle, $allowed_cycles)) {
+    $repayment_cycle = 'monthly';
+}
 
-        // Fetch customer's assigned agent_id
-        $agent_id = 0;
-        $stmt_cust = $conn->prepare("SELECT agent_id FROM customers WHERE id = ?");
-        $stmt_cust->bind_param("i", $customer_id);
-        $stmt_cust->execute();
-        $res_cust = $stmt_cust->get_result();
-        if ($res_cust && $row_cust = $res_cust->fetch_assoc()) {
-            $agent_id = (int) $row_cust['agent_id'];
-        }
-        $stmt_cust->close();
+if ($deposit_amount <= 0 || $tenure <= 0 || $interest_rate < 0) {
+    send_api_json_response([
+        'status' => 'error',
+        'message' => 'Invalid RD parameters provided. Installment amount and tenure must be positive.'
+    ], 400);
+}
 
-        if ($agent_id <= 0) {
-            http_response_code(400);
-            echo json_encode(['status' => 'error', 'message' => 'No active agent assigned to your customer account.']);
-            exit();
-        }
+// Fetch customer's assigned agent_id
+$agent_id = 0;
+$stmt_cust = $conn->prepare("SELECT agent_id FROM customers WHERE id = ?");
+$stmt_cust->bind_param("i", $customer_id);
+$stmt_cust->execute();
+$res_cust = $stmt_cust->get_result();
+if ($res_cust && $row_cust = $res_cust->fetch_assoc()) {
+    $agent_id = (int)$row_cust['agent_id'];
+}
+$stmt_cust->close();
 
-        // Calculation logic
-        $total_principal = $deposit_amount * $tenure;
+if ($agent_id <= 0) {
+    send_api_json_response(['status' => 'error', 'message' => 'No active agent assigned to your customer account.'], 400);
+}
 
-        switch ($repayment_cycle) {
-            case 'daily':
-                $cycles_per_year = 365;
-                $interval_string = "P{$tenure}D";
-                break;
-            case 'weekly':
-                $cycles_per_year = 52;
-                $interval_string = "P{$tenure}W";
-                break;
-            case 'monthly':
-                $cycles_per_year = 12;
-                $interval_string = "P{$tenure}M";
-                break;
-            case 'quarterly':
-                $cycles_per_year = 4;
-                $interval_string = "P" . ($tenure * 3) . "M";
-                break;
-            case 'half-yearly':
-                $cycles_per_year = 2;
-                $interval_string = "P" . ($tenure * 6) . "M";
-                break;
-            case 'annually':
-                $cycles_per_year = 1;
-                $interval_string = "P{$tenure}Y";
-                break;
-            default:
-                $cycles_per_year = 12;
-                $interval_string = "P{$tenure}M";
-        }
+// Calculation logic
+$total_principal = $deposit_amount * $tenure;
 
-        $time_in_years = $tenure / $cycles_per_year;
-        $total_interest = $total_principal * ($interest_rate / 100) * $time_in_years;
-        $maturity_amount = round($total_principal + $total_interest, 2);
+switch ($repayment_cycle) {
+    case 'daily':
+        $cycles_per_year = 365;
+        $interval_string = "P{$tenure}D";
+        break;
+    case 'weekly':
+        $cycles_per_year = 52;
+        $interval_string = "P{$tenure}W";
+        break;
+    case 'monthly':
+        $cycles_per_year = 12;
+        $interval_string = "P{$tenure}M";
+        break;
+    case 'quarterly':
+        $cycles_per_year = 4;
+        $interval_string = "P" . ($tenure * 3) . "M";
+        break;
+    case 'half-yearly':
+        $cycles_per_year = 2;
+        $interval_string = "P" . ($tenure * 6) . "M";
+        break;
+    case 'annually':
+        $cycles_per_year = 1;
+        $interval_string = "P{$tenure}Y";
+        break;
+    default:
+        $cycles_per_year = 12;
+        $interval_string = "P{$tenure}M";
+}
 
-        // Maturity Date calculation
-        $maturity_date = null;
-        try {
-            $start_date_obj = new DateTime($start_date);
-            $maturity_date_obj = $start_date_obj->add(new DateInterval($interval_string));
-            $maturity_date = $maturity_date_obj->format('Y-m-d');
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode(['status' => 'error', 'message' => 'Invalid start date or tenure format provided.']);
-            exit();
-        }
+$start_date_obj = new DateTime($start_date);
+$maturity_date_obj = clone $start_date_obj;
+try {
+    $maturity_date_obj->add(new DateInterval($interval_string));
+} catch (Exception $e) {
+    $maturity_date_obj->add(new DateInterval("P{$tenure}M"));
+}
+$maturity_date = $maturity_date_obj->format('Y-m-d');
 
-        $sql = "INSERT INTO recurring_deposits (
-                    customer_id, agent_id, deposit_amount, repayment_cycle,
-                    tenure, interest_rate, maturity_amount, start_date,
-                    maturity_date, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+$n = $tenure;
+$R = $interest_rate / 100.0;
+$total_interest = round(($deposit_amount * $n * ($n + 1) / 2.0) * ($R / $cycles_per_year), 2);
+$maturity_amount = round($total_principal + $total_interest, 2);
 
-        $stmt = $conn->prepare($sql);
-        if ($stmt === false) {
-            http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Database prepare error: ' . $conn->error]);
-            exit();
-        }
+$rd_number = 'RD-' . date('Ymd') . '-' . rand(1000, 9999);
 
-        $stmt->bind_param(
-            "iidsiddss",
-            $customer_id,
-            $agent_id,
-            $deposit_amount,
-            $repayment_cycle,
-            $tenure,
-            $interest_rate,
-            $maturity_amount,
-            $start_date,
-            $maturity_date
-        );
+$sql = "INSERT INTO recurring_deposits (
+            rd_number, customer_id, agent_id, deposit_amount, 
+            interest_rate, tenure, repayment_cycle, total_principal,
+            total_interest, maturity_amount, start_date, maturity_date, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
 
-        if ($stmt->execute()) {
-            $new_rd_id = $stmt->insert_id;
-            $response['status'] = 'success';
-            $response['message'] = 'Recurring Deposit application submitted successfully.';
-            $response['data'] = [
-                'rd_id' => $new_rd_id,
-                'customer_id' => $customer_id,
-                'agent_id' => $agent_id,
-                'deposit_amount' => $deposit_amount,
-                'repayment_cycle' => $repayment_cycle,
-                'tenure' => $tenure,
-                'interest_rate' => $interest_rate,
-                'total_principal' => $total_principal,
-                'total_interest' => round($total_interest, 2),
-                'maturity_amount' => $maturity_amount,
-                'start_date' => $start_date,
-                'maturity_date' => $maturity_date,
-                'status' => 'pending'
-            ];
-        } else {
-            http_response_code(500);
-            $response['message'] = 'Database insertion error: ' . $stmt->error;
-        }
-        $stmt->close();
-    } else {
-        http_response_code(405);
-        $response['message'] = 'Only POST request method allowed.';
-    }
+$stmt_insert = $conn->prepare($sql);
+$stmt_insert->bind_param(
+    "siiddissddss",
+    $rd_number, $customer_id, $agent_id, $deposit_amount,
+    $interest_rate, $tenure, $repayment_cycle, $total_principal,
+    $total_interest, $maturity_amount, $start_date, $maturity_date
+);
+
+if ($stmt_insert->execute()) {
+    $rd_id = $stmt_insert->insert_id;
+    $stmt_insert->close();
+
+    send_api_json_response([
+        'status' => 'success',
+        'message' => 'Recurring Deposit application submitted successfully and is pending approval.',
+        'data' => [
+            'rd_id' => $rd_id,
+            'rd_number' => $rd_number,
+            'installment_amount' => $deposit_amount,
+            'repayment_cycle' => $repayment_cycle,
+            'tenure_installments' => $tenure,
+            'interest_rate' => $interest_rate,
+            'total_principal' => $total_principal,
+            'total_interest' => $total_interest,
+            'maturity_amount' => $maturity_amount,
+            'start_date' => $start_date,
+            'maturity_date' => $maturity_date,
+            'status' => 'pending'
+        ]
+    ]);
 } else {
-    http_response_code(401);
-    $response['message'] = 'Authentication required. Please login.';
+    $err = $stmt_insert->error;
+    $stmt_insert->close();
+    send_api_json_response(['status' => 'error', 'message' => 'Database error submitting RD application: ' . $err], 500);
 }
-
-echo json_encode($response);
-$conn->close();
 ?>

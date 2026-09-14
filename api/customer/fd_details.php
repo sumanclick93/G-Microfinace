@@ -1,35 +1,14 @@
 <?php
-header('Content-Type: application/json');
+// Include database configuration & API helpers
+require_once('config.php');
 
-$configPath = 'config.php';
-if (!file_exists($configPath)) {
-    http_response_code(500); 
-    echo json_encode(['status' => 'error', 'message' => 'Server configuration error: Config file not found.']);
-    exit();
-}
-include($configPath);
+$customer_id = get_current_customer_id();
 
-if (!isset($conn) || !$conn instanceof mysqli) {
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Database connection failed.']);
-    exit();
-}
-
-$response = ['status' => 'error', 'message' => 'Authentication required.'];
-
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
-
-if (isset($_SESSION['customer_id'])) {
-    $customer_id = (int)$_SESSION['customer_id'];
+if ($customer_id) {
     $fd_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
     if ($fd_id <= 0) {
-        http_response_code(400);
-        $response['message'] = 'Missing or invalid FD ID parameter.';
-        echo json_encode($response);
-        exit();
+        send_api_json_response(['status' => 'error', 'message' => 'Missing or invalid FD ID parameter.'], 400, $conn);
     }
 
     $sql = "SELECT 
@@ -65,31 +44,26 @@ if (isset($_SESSION['customer_id'])) {
                     $p_row['payout_amount'] = (float)$p_row['payout_amount'];
                     $payouts[] = $p_row;
                 }
+                $stmt_p->close();
 
                 $fd['payouts'] = $payouts;
 
-                $response = [
-                    'status' => 'success',
-                    'data' => $fd
-                ];
+                $stmt->close();
+                send_api_json_response(['status' => 'success', 'data' => $fd], 200, $conn);
+
             } else {
-                http_response_code(404);
-                $response['message'] = 'Fixed Deposit account not found.';
+                $stmt->close();
+                send_api_json_response(['status' => 'error', 'message' => 'Fixed Deposit account not found.'], 404, $conn);
             }
         } else {
-            http_response_code(500);
-            $response['message'] = 'Database error fetching FD details: ' . $stmt->error;
+            $err = $stmt->error;
+            $stmt->close();
+            send_api_json_response(['status' => 'error', 'message' => 'Database error fetching FD details: ' . $err], 500, $conn);
         }
-        $stmt->close();
     } else {
-        http_response_code(500);
-        $response['message'] = 'Database query preparation error.';
+        send_api_json_response(['status' => 'error', 'message' => 'Database query preparation error.'], 500, $conn);
     }
 } else {
-    http_response_code(401);
-    $response['message'] = 'Authentication required. Please login.';
+    send_api_json_response(['status' => 'error', 'message' => 'Authentication required. Please login.'], 401, $conn);
 }
-
-echo json_encode($response);
-$conn->close();
 ?>

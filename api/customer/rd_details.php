@@ -1,45 +1,13 @@
 <?php
-// Set header for JSON response
-header('Content-Type: application/json');
+// Include database configuration & API helpers
+require_once('config.php');
 
-// --- START DEBUGGING ---
-// ini_set('display_errors', 1);
-// ini_set('display_startup_errors', 1);
-// error_reporting(E_ALL);
-// --- END DEBUGGING ---
+$customer_id = get_current_customer_id();
 
-// Include the database configuration (Corrected path)
-$configPath = '../../Super/config.php';
-if (!file_exists($configPath)) {
-    http_response_code(500); 
-    echo json_encode(['status' => 'error', 'message' => 'Server configuration error: Config file not found.']);
-    exit();
-}
-include($configPath);
-
-if (!isset($conn) || !$conn instanceof mysqli) {
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Database connection failed.']);
-    exit();
-}
-
-// Response array
-$response = ['status' => 'error', 'message' => 'Authentication required.'];
-
-// Start session to check login state
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
-
-// --- 1. Authentication Check ---
-if (isset($_SESSION['customer_id'])) {
-    $customer_id = $_SESSION['customer_id'];
-
-    // --- 2. Get RD ID from URL and Validate ---
+if ($customer_id) {
     if (isset($_GET['id']) && is_numeric($_GET['id'])) {
         $rd_id = (int)$_GET['id'];
 
-        // --- 3. Prepare Query to fetch RD details ---
         $sql_rd = "SELECT
                      rd.id, rd.deposit_amount, rd.repayment_cycle, rd.tenure,
                      rd.interest_rate, rd.maturity_amount, rd.start_date,
@@ -56,12 +24,10 @@ if (isset($_SESSION['customer_id'])) {
             if ($result_rd->num_rows === 1) {
                 $rd_details = $result_rd->fetch_assoc();
 
-                // --- 4. Fetch Payment History (MODIFIED to include status & proof) ---
                 $payments = [];
                 $total_paid = 0;
-                $installments_paid_count = 0; // Only counts approved installments now
+                $installments_paid_count = 0;
                 
-                // Fetching the new status and proof_image columns
                 $sql_payments = "SELECT payment_date, amount_paid, notes, status, proof_image 
                                  FROM rd_payments 
                                  WHERE rd_id = ? 
@@ -76,7 +42,6 @@ if (isset($_SESSION['customer_id'])) {
                     while ($row = $result_payments->fetch_assoc()) {
                         $row['amount_paid'] = (float)$row['amount_paid'];
                         
-                        // Helper for the App: Provide a clean URL path if a proof image exists
                         if (!empty($row['proof_image'])) {
                             $row['proof_url'] = 'uploads/proofs/' . $row['proof_image'];
                         } else {
@@ -85,8 +50,6 @@ if (isset($_SESSION['customer_id'])) {
                         
                         $payments[] = $row;
 
-                        // --- STRICT MATH LOGIC ---
-                        // Only count the payment toward the deposited total if it is fully approved!
                         if ($row['status'] === 'approved') {
                             $total_paid += $row['amount_paid'];
                             $installments_paid_count++;
@@ -94,56 +57,48 @@ if (isset($_SESSION['customer_id'])) {
                     }
                     $stmt_payments->close();
 
-                    // --- 5. Format Success Response ---
-                    $response['status'] = 'success';
-                    $response['data'] = [
-                        'id' => $rd_details['id'],
-                        'deposit_amount' => (float)$rd_details['deposit_amount'],
-                        'repayment_cycle' => $rd_details['repayment_cycle'],
-                        
-                        // Strict balances based ONLY on approved payments
-                        'total_emi' => (int)$rd_details['tenure'],
-                        'no_of_paid_emi' => $installments_paid_count,
-                        
-                        'tenure_description' => $rd_details['tenure'] . ' ' . ucfirst($rd_details['repayment_cycle']) . ' Deposits',
-                        'interest_rate' => (float)$rd_details['interest_rate'],
-                        'maturity_amount' => (float)$rd_details['maturity_amount'],
-                        'start_date' => $rd_details['start_date'],
-                        'maturity_date' => $rd_details['maturity_date'],
-                        'status' => $rd_details['status'],
-                        'status_formatted' => ucwords(str_replace('-', ' ', $rd_details['status'])),
-                        'approval_date' => $rd_details['approval_date'],
-                        'admin_notes' => $rd_details['admin_notes'],
-                        'total_deposited' => round($total_paid, 2),
-                        
-                        // Includes the new status and proof_url for each transaction
-                        'payments' => $payments
+                    $response = [
+                        'status' => 'success',
+                        'data' => [
+                            'id' => $rd_details['id'],
+                            'deposit_amount' => (float)$rd_details['deposit_amount'],
+                            'repayment_cycle' => $rd_details['repayment_cycle'],
+                            'total_emi' => (int)$rd_details['tenure'],
+                            'no_of_paid_emi' => $installments_paid_count,
+                            'tenure_description' => $rd_details['tenure'] . ' ' . ucfirst($rd_details['repayment_cycle']) . ' Deposits',
+                            'interest_rate' => (float)$rd_details['interest_rate'],
+                            'maturity_amount' => (float)$rd_details['maturity_amount'],
+                            'start_date' => $rd_details['start_date'],
+                            'maturity_date' => $rd_details['maturity_date'],
+                            'status' => $rd_details['status'],
+                            'status_formatted' => ucwords(str_replace('-', ' ', $rd_details['status'])),
+                            'approval_date' => $rd_details['approval_date'],
+                            'admin_notes' => $rd_details['admin_notes'],
+                            'total_deposited' => round($total_paid, 2),
+                            'payments' => $payments
+                        ]
                     ];
-                    unset($response['message']);
+                    $stmt_rd->close();
+                    send_api_json_response($response, 200, $conn);
 
                 } else {
-                    $response['message'] = 'Database error fetching deposit history: ' . $stmt_payments->error;
+                    $stmt_rd->close();
+                    send_api_json_response(['status' => 'error', 'message' => 'Database error fetching deposit history: ' . $stmt_payments->error], 500, $conn);
                 }
             } else {
-                http_response_code(404); // Not Found
-                $response['message'] = 'Recurring Deposit not found or access denied.';
+                $stmt_rd->close();
+                send_api_json_response(['status' => 'error', 'message' => 'Recurring Deposit not found or access denied.'], 404, $conn);
             }
         } else {
-            $response['message'] = 'Database error fetching RD details: ' . $stmt_rd->error;
+            $stmt_rd->close();
+            send_api_json_response(['status' => 'error', 'message' => 'Database error fetching RD details: ' . $stmt_rd->error], 500, $conn);
         }
-        $stmt_rd->close();
 
     } else {
-        http_response_code(400); // Bad Request
-        $response['message'] = 'Invalid or missing RD ID.';
+        send_api_json_response(['status' => 'error', 'message' => 'Invalid or missing RD ID.'], 400, $conn);
     }
 
 } else {
-     http_response_code(401); // Unauthorized status code
-     $response['message'] = 'Authentication required. Please login.';
+    send_api_json_response(['status' => 'error', 'message' => 'Authentication required. Please login.'], 401, $conn);
 }
-
-// --- 6. Send JSON Response ---
-echo json_encode($response);
-$conn->close();
 ?>

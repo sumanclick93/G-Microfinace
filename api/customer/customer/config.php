@@ -1,26 +1,74 @@
 <?php
-// --- START: Add these lines for debugging ---
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+// Start output buffering to prevent stray warnings/whitespace from corrupting JSON responses
+if (ob_get_level() == 0) {
+    ob_start();
+}
+
+// Disable inline error display in API output stream to prevent JSON parse errors
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
-// --- END: Debugging lines ---
+
 // Database Configuration
-define('DB_HOST', 'localhost');
-define('DB_USER', 'microfinance_fund'); // Your database username
-define('DB_PASS', 'ys!bnLg0j.T[');     // Your database password
-define('DB_NAME', 'microfinance_fund'); // Your database name
+if (!defined('DB_HOST')) define('DB_HOST', 'localhost');
+if (!defined('DB_USER')) define('DB_USER', 'microfinance_fund'); // Your database username
+if (!defined('DB_PASS')) define('DB_PASS', 'ys!bnLg0j.T[');     // Your database password
+if (!defined('DB_NAME')) define('DB_NAME', 'microfinance_fund'); // Your database name
 
 // Create a connection
-$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+$conn = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 
 // Check the connection
 if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+    send_api_json_response(['status' => 'error', 'message' => 'Database connection failed: ' . $conn->connect_error], 500);
 }
 
 // Start the session for login management
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
+}
+
+/**
+ * Send clean JSON response and exit safely
+ */
+if (!function_exists('send_api_json_response')) {
+    function send_api_json_response($response, $http_code = 200, $conn = null) {
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        http_response_code($http_code);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($response);
+        if ($conn instanceof mysqli) {
+            @$conn->close();
+        }
+        exit();
+    }
+}
+
+/**
+ * Helper to get current authenticated customer ID (Session or Request parameter fallback)
+ */
+if (!function_exists('get_current_customer_id')) {
+    function get_current_customer_id() {
+        if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
+            return (int)$_SESSION['customer_id'];
+        }
+        if (isset($_REQUEST['customer_id']) && is_numeric($_REQUEST['customer_id'])) {
+            return (int)$_REQUEST['customer_id'];
+        }
+        if (isset($_REQUEST['id']) && is_numeric($_REQUEST['id']) && basename($_SERVER['SCRIPT_NAME']) !== 'loan_details.php' && basename($_SERVER['SCRIPT_NAME']) !== 'rd_details.php' && basename($_SERVER['SCRIPT_NAME']) !== 'fd_details.php') {
+            return (int)$_REQUEST['id'];
+        }
+        $raw_body = file_get_contents('php://input');
+        if (!empty($raw_body)) {
+            $json = json_decode($raw_body, true);
+            if (is_array($json) && isset($json['customer_id']) && is_numeric($json['customer_id'])) {
+                return (int)$json['customer_id'];
+            }
+        }
+        return null;
+    }
 }
 
 // Auto-ensure loan_start_date column exists in loans table

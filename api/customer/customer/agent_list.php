@@ -1,33 +1,26 @@
-<?php
-// Set header for JSON response
-header('Content-Type: application/json');
-
-// Include the database configuration (adjust path as needed)
-include('config.php'); // Assuming config is two levels up in Super folder
-
-// Response array
-$response = ['status' => 'success', 'data' => []];
-
-// --- 1. Prepare and Execute Query ---
-// Select only active agents, ordering by name for the dropdown
-$sql = "SELECT id, first_name, last_name FROM agents WHERE is_active = TRUE ORDER BY first_name ASC, last_name ASC";
-$result = $conn->query($sql);
-
-// --- 2. Fetch Results ---
-if ($result && $result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        // Combine first and last name for display
-        $row['full_name'] = trim($row['first_name'] . ' ' . $row['last_name']);
-        unset($row['first_name']); // Remove individual name fields if not needed
-        unset($row['last_name']);
-        $response['data'][] = $row;
-    }
-} else {
-    // Optional: Handle case where no active agents are found
-    $response['message'] = 'No active agents found.';
-}
-
-// --- 3. Send JSON Response ---
-echo json_encode($response);
-$conn->close();
+<?php
+// Include database configuration & API helpers
+require_once('config.php');
+
+$response = ['status' => 'success', 'data' => []];
+
+$sql = "SELECT id, first_name, last_name FROM agents WHERE is_active = 1 OR status = 'active' ORDER BY first_name ASC, last_name ASC";
+$result = @$conn->query($sql);
+if (!$result) {
+    $sql = "SELECT id, first_name, last_name FROM agents ORDER BY first_name ASC, last_name ASC";
+    $result = $conn->query($sql);
+}
+
+if ($result && $result->num_rows > 0) {
+    while ($row = $result->fetch_assoc()) {
+        $row['full_name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+        unset($row['first_name']);
+        unset($row['last_name']);
+        $response['data'][] = $row;
+    }
+} else {
+    $response['message'] = 'No active agents found.';
+}
+
+send_api_json_response($response, 200, $conn);
 ?>

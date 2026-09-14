@@ -1,13 +1,6 @@
 <?php
-// Set header for JSON response
-header('Content-Type: application/json');
-
-// Include the database configuration
-$configPath = '../../Super/config.php';
-if (!file_exists($configPath)) { http_response_code(500); echo json_encode(['status' => 'error', 'message' => 'Server configuration error.']); exit(); }
-include($configPath);
-
-if (!isset($conn) || !$conn instanceof mysqli) { http_response_code(500); echo json_encode(['status' => 'error', 'message' => 'Database connection failed.']); exit(); }
+// Include database configuration & API helpers
+require_once('config.php');
 
 // Response array
 $response = ['status' => 'error', 'message' => 'Invalid request.'];
@@ -15,14 +8,19 @@ $response = ['status' => 'error', 'message' => 'Invalid request.'];
 // --- 1. Check for POST request ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    // --- 2. Get Customer ID from POST data (INSECURE) ---
-    // if (!isset($_POST['customer_id']) || !is_numeric($_POST['customer_id'])) {
-    //     http_response_code(400); // Bad Request
-    //     $response['message'] = 'A valid customer_id is required in the form-data.';
-    //     echo json_encode($response);
-    //     exit();
-    // }
-    $customer_id = (int)$_POST['id'];
+    // --- 2. Get Customer ID safely ---
+    $customer_id = get_current_customer_id();
+    if (!$customer_id) {
+        if (isset($_POST['id']) && is_numeric($_POST['id'])) {
+            $customer_id = (int)$_POST['id'];
+        } elseif (isset($_POST['customer_id']) && is_numeric($_POST['customer_id'])) {
+            $customer_id = (int)$_POST['customer_id'];
+        }
+    }
+    
+    if (!$customer_id) {
+        send_api_json_response(['status' => 'error', 'message' => 'A valid customer_id is required.'], 400, $conn);
+    }
     
     // --- 3. Get current filenames (and check if customer exists) ---
     $stmt_get = $conn->prepare("SELECT avatar, aadhar_photo, pan_photo FROM customers WHERE id = ?");
@@ -31,10 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result = $stmt_get->get_result();
     
     if ($result->num_rows === 0) {
-        http_response_code(404); // Not Found
-        $response['message'] = 'Customer with this ID not found.';
-        echo json_encode($response);
-        exit();
+        $stmt_get->close();
+        send_api_json_response(['status' => 'error', 'message' => 'Customer with this ID not found.'], 404, $conn);
     }
     $current_files = $result->fetch_assoc();
     $stmt_get->close();
