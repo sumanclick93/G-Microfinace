@@ -26,12 +26,12 @@ $sql = "SELECT fd.*,
         FROM fixed_deposits fd
         LEFT JOIN customers c ON fd.customer_id = c.id
         LEFT JOIN agents a ON fd.agent_id = a.id
-        WHERE fd.id = ? AND fd.agent_id = ?";
+        WHERE fd.id = ? AND (fd.agent_id = ? OR c.agent_id = ?)";
 
 $res = false;
 $stmt = $conn->prepare($sql);
 if ($stmt) {
-    $stmt->bind_param("ii", $fd_id, $agent_id);
+    $stmt->bind_param("iii", $fd_id, $agent_id, $agent_id);
     if ($stmt->execute()) {
         $res = $stmt->get_result();
     }

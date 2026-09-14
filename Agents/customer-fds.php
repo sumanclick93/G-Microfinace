@@ -31,8 +31,8 @@ if ($customer_res->num_rows == 0) {
 $customer = $customer_res->fetch_assoc();
 
 // Fetch customer FDs
-$stmt_fd = $conn->prepare("SELECT * FROM fixed_deposits WHERE customer_id = ? AND agent_id = ? ORDER BY id DESC");
-$stmt_fd->bind_param("ii", $customer_id, $agent_id);
+$stmt_fd = $conn->prepare("SELECT * FROM fixed_deposits WHERE customer_id = ? ORDER BY id DESC");
+$stmt_fd->bind_param("i", $customer_id);
 $stmt_fd->execute();
 $fds_res = $stmt_fd->get_result();
 ?>

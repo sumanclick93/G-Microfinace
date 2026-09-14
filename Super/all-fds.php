@@ -14,23 +14,15 @@ $status_filter = $_GET['status'] ?? 'all';
 $search_query = trim($_GET['search'] ?? '');
 
 $where_clauses = ["1=1"];
-$params = [];
-$types = "";
 
 if ($status_filter !== 'all' && in_array($status_filter, ['pending', 'active', 'matured', 'closed', 'rejected'])) {
-    $where_clauses[] = "fd.status = ?";
-    $params[] = $status_filter;
-    $types .= "s";
+    $safe_status = $conn->real_escape_string($status_filter);
+    $where_clauses[] = "fd.status = '$safe_status'";
 }
 
 if (!empty($search_query)) {
-    $where_clauses[] = "(c.full_name LIKE ? OR c.phone LIKE ? OR fd.fd_number LIKE ? OR CONCAT(a.first_name, ' ', IFNULL(a.last_name, '')) LIKE ?)";
-    $like_str = "%" . $search_query . "%";
-    $params[] = $like_str;
-    $params[] = $like_str;
-    $params[] = $like_str;
-    $params[] = $like_str;
-    $types .= "ssss";
+    $safe_search = $conn->real_escape_string($search_query);
+    $where_clauses[] = "(c.full_name LIKE '%$safe_search%' OR c.phone LIKE '%$safe_search%' OR fd.fd_number LIKE '%$safe_search%' OR CONCAT(a.first_name, ' ', IFNULL(a.last_name, '')) LIKE '%$safe_search%')";
 }
 
 $where_sql = implode(" AND ", $where_clauses);
@@ -42,16 +34,7 @@ $sql = "SELECT fd.*, IFNULL(c.full_name, 'N/A') as customer_name, IFNULL(c.phone
         WHERE $where_sql 
         ORDER BY fd.id DESC";
 
-$result = false;
-$stmt = $conn->prepare($sql);
-if ($stmt) {
-    if (!empty($types)) {
-        $stmt->bind_param($types, ...$params);
-    }
-    if ($stmt->execute()) {
-        $result = $stmt->get_result();
-    }
-}
+$result = $conn->query($sql);
 
 // Stats summary for Admin
 $stats = ['total_count' => 0, 'active_amount' => 0, 'pending_count' => 0, 'matured_count' => 0];

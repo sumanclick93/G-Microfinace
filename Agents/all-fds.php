@@ -16,23 +16,17 @@ $agent_id = $_SESSION['agent_id'];
 $status_filter = $_GET['status'] ?? 'all';
 $search_query = trim($_GET['search'] ?? '');
 
-$where_clauses = ["fd.agent_id = ?"];
-$params = [$agent_id];
-$types = "i";
+$agent_id_clean = (int)$agent_id;
+$where_clauses = ["(fd.agent_id = $agent_id_clean OR c.agent_id = $agent_id_clean)"];
 
 if ($status_filter !== 'all' && in_array($status_filter, ['pending', 'active', 'matured', 'closed', 'rejected'])) {
-    $where_clauses[] = "fd.status = ?";
-    $params[] = $status_filter;
-    $types .= "s";
+    $safe_status = $conn->real_escape_string($status_filter);
+    $where_clauses[] = "fd.status = '$safe_status'";
 }
 
 if (!empty($search_query)) {
-    $where_clauses[] = "(c.full_name LIKE ? OR c.phone LIKE ? OR fd.fd_number LIKE ?)";
-    $like_str = "%" . $search_query . "%";
-    $params[] = $like_str;
-    $params[] = $like_str;
-    $params[] = $like_str;
-    $types .= "sss";
+    $safe_search = $conn->real_escape_string($search_query);
+    $where_clauses[] = "(c.full_name LIKE '%$safe_search%' OR c.phone LIKE '%$safe_search%' OR fd.fd_number LIKE '%$safe_search%')";
 }
 
 $where_sql = implode(" AND ", $where_clauses);
@@ -43,10 +37,7 @@ $sql = "SELECT fd.*, IFNULL(c.full_name, 'N/A') as customer_name, IFNULL(c.phone
         WHERE $where_sql 
         ORDER BY fd.id DESC";
 
-$stmt = $conn->prepare($sql);
-$stmt->bind_param($types, ...$params);
-$stmt->execute();
-$result = $stmt->get_result();
+$result = $conn->query($sql);
 
 // Stats summary for the logged in agent
 $stats = ['total_count' => 0, 'active_amount' => 0, 'pending_count' => 0, 'matured_count' => 0];
