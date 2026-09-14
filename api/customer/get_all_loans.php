@@ -126,7 +126,9 @@ if (isset($_SESSION['customer_id'])) {
             $row['no_of_paid_emi'] = (int)$row['no_of_paid_emi'];
             
             // Tenure description
-            if (isset($row['tenure']) && isset($row['repayment_cycle'])) {
+            if (($row['interest_calculation_type'] ?? '') === 'monthly_interest_only') {
+                 $row['tenure_description'] = 'Monthly (Until Closed)';
+            } elseif (isset($row['tenure']) && isset($row['repayment_cycle'])) {
                  $row['tenure_description'] = $row['tenure'] . ' ' . ucfirst($row['repayment_cycle']) . ' Payments';
             } else {
                  $row['tenure_description'] = 'N/A';

@@ -323,7 +323,9 @@ if ($payments_result->num_rows > 0) {
     }
 }
 $status_clean = strtolower(trim($loan['status']));
-if ($total_paid >= (float)$loan['total_repayable_amount'] - 0.01 && !in_array($status_clean, ['closed', 'paid', 'rejected', 'premature-closed'])) {
+$is_monthly_interest = (($loan['interest_calculation_type'] ?? '') === 'monthly_interest_only');
+
+if (!$is_monthly_interest && $total_paid >= (float)$loan['total_repayable_amount'] - 0.01 && !in_array($status_clean, ['closed', 'paid', 'rejected', 'premature-closed'])) {
     $conn->query("UPDATE loans SET status = 'paid' WHERE id = " . intval($loan_id));
     $loan['status'] = 'paid';
     $status_clean = 'paid';
@@ -332,10 +334,12 @@ if ($total_paid >= (float)$loan['total_repayable_amount'] - 0.01 && !in_array($s
 if (in_array($status_clean, ['closed', 'paid'])) {
     $progress_percentage = 100;
     $total_paid = max($total_paid, (float)$loan['total_repayable_amount']);
-    $paid_emis_count = (int)$loan['tenure'];
+    if (!$is_monthly_interest) {
+        $paid_emis_count = (int)$loan['tenure'];
+    }
 } else {
     $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $loan['total_repayable_amount']) * 100 : 0;
-    if ($loan['monthly_installment'] > 0) {
+    if (!$is_monthly_interest && $loan['monthly_installment'] > 0) {
         $calc_emis = (int)floor($total_paid / (float)$loan['monthly_installment']);
         $paid_emis_count = min((int)$loan['tenure'], max($paid_emis_count, $calc_emis));
     }
@@ -382,9 +386,9 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                              <li class="list-group-item d-flex justify-content-between"><strong>Processing Fee:</strong> ₹<?php echo number_format($loan['processing_fee'], 2); ?></li>
                                          <?php endif; ?>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Total Repayable:</strong> ₹<?php echo number_format($loan['total_repayable_amount'], 2); ?></li>
-                                         <li class="list-group-item d-flex justify-content-between"><strong>Installment:</strong> ₹<?php echo number_format($loan['monthly_installment'], 2); ?> <?php if(($loan['interest_calculation_type'] ?? '') === 'monthly_interest_only') echo '<small class="text-muted">(Interest Only)</small>'; ?></li>
-                                         <li class="list-group-item d-flex justify-content-between"><strong>Tenure (Total EMIs):</strong> <?php echo $loan['tenure'] . ' ' . ucfirst($loan['repayment_cycle']) . 's'; ?></li>
-                                         <li class="list-group-item d-flex justify-content-between"><strong>EMIs Paid:</strong> <span><strong><?php echo $paid_emis_count; ?></strong> of <?php echo $loan['tenure']; ?></span></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong><?php echo $is_monthly_interest ? 'Monthly Interest:' : 'Installment:'; ?></strong> ₹<?php echo number_format($loan['monthly_installment'], 2); ?> <?php if($is_monthly_interest) echo '<small class="text-muted">(Monthly Interest Only)</small>'; ?></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Tenure:</strong> <?php echo $is_monthly_interest ? 'Open-Ended (Monthly)' : ($loan['tenure'] . ' ' . ucfirst($loan['repayment_cycle']) . 's'); ?></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Payments Paid:</strong> <span><strong><?php echo $paid_emis_count; ?></strong> <?php echo $is_monthly_interest ? 'Payment(s)' : ('of ' . $loan['tenure']); ?></span></li>
                                     </ul>
                                 </div>
                             </div>

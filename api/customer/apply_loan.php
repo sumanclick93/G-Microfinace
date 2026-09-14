@@ -36,7 +36,7 @@ if (isset($_SESSION['customer_id'])) {
             $loan_type = 'standard';
         }
 
-        $interest_calculation_type = ($loan_type === 'interest_only') ? 'monthly_interest_only' : 'flat_total';
+        $interest_calculation_type = ($loan_type === 'interest_only' || $loan_type === 'gold') ? 'monthly_interest_only' : 'flat_total';
 
         // Fetch customer's assigned agent_id
         $agent_id = 0;
@@ -164,19 +164,20 @@ if (isset($_SESSION['customer_id'])) {
             }
         }
 
-        if ($loan_amount <= 0 || $tenure <= 0 || $interest_rate < 0) {
+        if ($loan_amount <= 0 || ($loan_type === 'standard' && $tenure <= 0) || $interest_rate < 0) {
             http_response_code(400);
             echo json_encode(['status' => 'error', 'message' => 'Invalid loan parameters provided.']);
             exit();
         }
 
         // Calculations
-        if ($loan_type === 'interest_only') {
+        if ($interest_calculation_type === 'monthly_interest_only') {
+            $tenure = 0;
             $monthly_installment = round($loan_amount * ($interest_rate / 100), 2);
-            $total_repayable_amount = round($loan_amount + ($monthly_installment * $tenure), 2);
+            $total_repayable_amount = round($loan_amount, 2);
         } else {
             $total_repayable_amount = round($loan_amount * (1 + ($interest_rate / 100)), 2);
-            $monthly_installment = round($total_repayable_amount / $tenure, 2);
+            $monthly_installment = round($total_repayable_amount / max(1, $tenure), 2);
         }
 
         date_default_timezone_set('Asia/Kolkata');

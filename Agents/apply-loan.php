@@ -63,13 +63,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $loan_type = $_POST['loan_type'] ?? 'standard';
     $loan_amount = (float)$_POST['loan_amount'];
     $interest_rate = (float)$_POST['interest_rate'];
-    $tenure = (int)$_POST['tenure'];
+    $tenure = isset($_POST['tenure']) && $_POST['tenure'] !== '' ? (int)$_POST['tenure'] : 0;
     $repayment_cycle = $_POST['repayment_cycle'] ?? 'monthly';
     $total_repayable = (float)$_POST['total_repayable_amount'];
     $monthly_installment = (float)$_POST['monthly_installment'];
     $start_date = isset($_POST['start_date']) ? $_POST['start_date'] : date('Y-m-d');
 
-    $interest_calculation_type = ($loan_type === 'interest_only') ? 'monthly_interest_only' : 'flat_total';
+    $interest_calculation_type = ($loan_type === 'interest_only' || $loan_type === 'gold') ? 'monthly_interest_only' : 'flat_total';
+    if ($interest_calculation_type === 'monthly_interest_only') {
+        $tenure = 0;
+        $monthly_installment = round($loan_amount * ($interest_rate / 100), 2);
+        $total_repayable = round($loan_amount, 2);
+    }
     
     $gold_weight_grams = null;
     $gold_photo_path = null;
@@ -177,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Server-Side Wallet Balance Validation
     if ($loan_amount > $agent_wallet_balance) {
         $message = "<div class='alert alert-danger'>Loan amount cannot exceed your wallet balance of ₹" . number_format($agent_wallet_balance, 2) . ".</div>";
-    } elseif ($customer_id_for_loan <= 0 || $loan_amount <= 0 || $tenure <= 0 || empty($start_date)) {
+    } elseif ($customer_id_for_loan <= 0 || $loan_amount <= 0 || ($loan_type === 'standard' && $tenure <= 0) || empty($start_date)) {
         $message = "<div class='alert alert-danger'>Please fill in all required fields correctly.</div>";
     } elseif ($loan_type === 'gold' && $gold_weight_grams <= 0) {
         $message = "<div class='alert alert-danger'>Please enter a valid Gold Weight (in Grams) for Gold Loan.</div>";
@@ -256,7 +261,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                 <select class="form-select" id="loanTypeSelect" name="loan_type" required>
                                                     <option value="standard" selected>Standard Loan (Principal + Flat Interest)</option>
                                                     <option value="interest_only">Interest Loan (Monthly Interest Only, Principal at End)</option>
-                                                    <option value="gold">Gold Loan (Collateral Backed)</option>
+                                                    <option value="gold">Gold Loan (Collateral Backed - Monthly Interest)</option>
                                                 </select>
                                             </div>
 
@@ -290,7 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                                             <div class="mb-4">
                                                 <label class="form-label-title mb-2">Loan Interest Rate (%)</label>
-                                                <input class="form-control" type="number" step="0.1" id="interestRate" name="interest_rate" placeholder="e.g., 5.5" required>
+                                                <input class="form-control" type="number" step="0.1" id="interestRate" name="interest_rate" placeholder="e.g., 6" required>
                                                 <small id="interestHelpText" class="form-text text-muted"></small>
                                             </div>
 
@@ -311,7 +316,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                 </select>
                                             </div>
 
-                                            <div class="col-md-6 mb-4">
+                                            <div class="col-md-6 mb-4" id="tenureGroup">
                                                 <label class="form-label-title mb-2">Loan Tenure</label>
                                                 <input class="form-control" type="number" id="tenure" name="tenure" placeholder="e.g., 12" required>
                                                 <small class="form-text text-muted">Enter number of payments (e.g., for 12 months, enter 12).</small>
@@ -359,6 +364,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             const loanAmountInput = document.getElementById('loanAmount');
             const interestRateInput = document.getElementById('interestRate');
+            const tenureGroup = document.getElementById('tenureGroup');
             const tenureInput = document.getElementById('tenure');
             const totalRepayableInput = document.getElementById('totalRepayable');
             const installmentAmountInput = document.getElementById('installmentAmount');
@@ -383,20 +389,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     processingFeeCol.style.display = 'block';
                     goldPhotoInput.required = true;
                     goldWeightInput.required = true;
-                    installmentLabel.textContent = 'Installment Amount (₹)';
-                    interestHelpText.textContent = 'Gold loan interest calculated on flat/amortized basis.';
+                    tenureGroup.style.display = 'none';
+                    tenureInput.required = false;
+                    installmentLabel.textContent = 'Monthly Interest Payment (₹)';
+                    interestHelpText.textContent = 'Gold Loan: Customer pays monthly interest only. Principal is repayable when loan is closed.';
                 } else if (selectedType === 'interest_only') {
                     goldLoanSection.style.display = 'none';
                     processingFeeCol.style.display = 'none';
                     goldPhotoInput.required = false;
                     goldWeightInput.required = false;
+                    tenureGroup.style.display = 'none';
+                    tenureInput.required = false;
                     installmentLabel.textContent = 'Monthly Interest Payment (₹)';
-                    interestHelpText.textContent = 'Interest Loan: Customer pays monthly interest only. Principal is repayable at tenure end.';
+                    interestHelpText.textContent = 'Interest Loan: Customer pays monthly interest only. Principal is repayable when loan is closed.';
                 } else {
                     goldLoanSection.style.display = 'none';
                     processingFeeCol.style.display = 'none';
                     goldPhotoInput.required = false;
                     goldWeightInput.required = false;
+                    tenureGroup.style.display = 'block';
+                    tenureInput.required = true;
                     installmentLabel.textContent = 'Installment Amount (₹)';
                     interestHelpText.textContent = 'Standard loan amortization with flat total interest.';
                 }
@@ -441,26 +453,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 submitButton.disabled = hasError;
 
                 // 3. Financial Calculations
-                if (!isNaN(principal) && principal > 0 && !isNaN(interest) && interest >= 0 && !isNaN(tenure) && tenure > 0) {
-                    if (selectedType === 'interest_only') {
-                        // Monthly interest payment calculation
+                if (!isNaN(principal) && principal > 0 && !isNaN(interest) && interest >= 0) {
+                    if (selectedType === 'interest_only' || selectedType === 'gold') {
+                        // Monthly interest payment calculation (Open-ended until closed)
                         const monthlyInterest = principal * (interest / 100);
-                        const totalRepayable = principal + (monthlyInterest * tenure);
-                        
                         installmentAmountInput.value = monthlyInterest.toFixed(2);
-                        totalRepayableInput.value = totalRepayable.toFixed(2);
-                    } else {
-                        // Standard / Gold Loan Flat Total calculation
-                        const totalRepayable = principal * (1 + (interest / 100));
-                        const installment = totalRepayable / tenure;
-                        
-                        totalRepayableInput.value = totalRepayable.toFixed(2);
-                        installmentAmountInput.value = installment.toFixed(2);
+                        totalRepayableInput.value = principal.toFixed(2);
 
                         if (selectedType === 'gold') {
                             const fee = (principal * feePercent) / 100;
                             processingFeeInput.value = fee.toFixed(2);
                         }
+                    } else if (!isNaN(tenure) && tenure > 0) {
+                        // Standard Loan Flat Total calculation
+                        const totalRepayable = principal * (1 + (interest / 100));
+                        const installment = totalRepayable / tenure;
+                        
+                        totalRepayableInput.value = totalRepayable.toFixed(2);
+                        installmentAmountInput.value = installment.toFixed(2);
+                    } else {
+                        totalRepayableInput.value = '';
+                        installmentAmountInput.value = '';
                     }
                 } else {
                     totalRepayableInput.value = '';

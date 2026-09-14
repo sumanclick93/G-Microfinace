@@ -62,21 +62,30 @@ if ($loan_data['status'] !== 'pending') {
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $loan_amount = (float)$_POST['loan_amount'];
     $interest_rate = (float)$_POST['interest_rate'];
-    $tenure = (int)$_POST['tenure'];
+    $tenure = isset($_POST['tenure']) && $_POST['tenure'] !== '' ? (int)$_POST['tenure'] : 0;
     $repayment_cycle = $_POST['repayment_cycle'];
     $total_repayable = (float)$_POST['total_repayable_amount'];
     $monthly_installment = (float)$_POST['monthly_installment'];
     $start_date = isset($_POST['start_date']) ? $_POST['start_date'] : date('Y-m-d');
 
+    $loan_type = $loan_data['loan_type'] ?? 'standard';
+    $interest_calculation_type = ($loan_type === 'interest_only' || $loan_type === 'gold') ? 'monthly_interest_only' : 'flat_total';
+
     // Server-Side Wallet Balance Validation
     if ($loan_amount > $agent_wallet_balance) {
         $message = "<div class='alert alert-danger'>Loan amount cannot exceed your wallet balance of ₹" . number_format($agent_wallet_balance, 2) . ".</div>";
-    } elseif ($loan_amount <= 0 || $tenure <= 0 || empty($start_date)) {
+    } elseif ($loan_amount <= 0 || ($loan_type === 'standard' && $tenure <= 0) || empty($start_date)) {
         $message = "<div class='alert alert-danger'>Please fill in all required fields correctly.</div>";
     } else {
         // Calculate server-side to prevent tampering/rounding errors
-        $total_repayable = $loan_amount * (1 + ($interest_rate / 100));
-        $monthly_installment = $total_repayable / $tenure;
+        if ($interest_calculation_type === 'monthly_interest_only') {
+            $tenure = 0;
+            $monthly_installment = round($loan_amount * ($interest_rate / 100), 2);
+            $total_repayable = round($loan_amount, 2);
+        } else {
+            $total_repayable = round($loan_amount * (1 + ($interest_rate / 100)), 2);
+            $monthly_installment = round($total_repayable / max(1, $tenure), 2);
+        }
 
         $stmt_update = $conn->prepare("
             UPDATE loans 
@@ -155,9 +164,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                 </select>
                                             </div>
 
-                                            <div class="col-md-6 mb-4">
+                                            <?php 
+                                                $is_open_ended = in_array($loan_data['loan_type'] ?? 'standard', ['interest_only', 'gold']);
+                                            ?>
+                                            <div class="col-md-6 mb-4" id="tenureGroup" <?php if ($is_open_ended) echo 'style="display: none;"'; ?>>
                                                 <label class="form-label-title mb-2">Loan Tenure</label>
-                                                <input class="form-control" type="number" id="tenure" name="tenure" value="<?php echo htmlspecialchars($loan_data['tenure']); ?>" required>
+                                                <input class="form-control" type="number" id="tenure" name="tenure" value="<?php echo htmlspecialchars($loan_data['tenure']); ?>" <?php if (!$is_open_ended) echo 'required'; ?>>
                                                 <small class="form-text text-muted">Enter number of payments (e.g., for 12 months, enter 12).</small>
                                             </div>
 
@@ -169,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                             </div>
 
                                             <div class="col-md-6 mb-4">
-                                                <label class="form-label-title mb-2">Installment Amount (₹)</label>
+                                                <label class="form-label-title mb-2" id="installmentLabel"><?php echo $is_open_ended ? 'Monthly Interest Payment (₹)' : 'Installment Amount (₹)'; ?></label>
                                                 <input class="form-control" type="number" id="installmentAmount" name="monthly_installment" value="<?php echo htmlspecialchars($loan_data['monthly_installment']); ?>" readonly>
                                             </div>
 
@@ -199,6 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             const walletBalance = <?php echo $agent_wallet_balance; ?>;
             const walletErrorDiv = document.getElementById('walletError');
             const submitButton = document.getElementById('submitButton');
+            const loanType = "<?php echo $loan_data['loan_type'] ?? 'standard'; ?>";
 
             function performCalculations() {
                 const principal = parseFloat(loanAmountInput.value);
@@ -214,12 +227,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     submitButton.disabled = false;
                 }
 
-                if (!isNaN(principal) && principal > 0 && !isNaN(interest) && interest >= 0 && !isNaN(tenure) && tenure > 0) {
-                    const totalRepayable = principal * (1 + (interest / 100));
-                    const installment = totalRepayable / tenure;
-
-                    totalRepayableInput.value = totalRepayable.toFixed(2);
-                    installmentAmountInput.value = installment.toFixed(2);
+                if (!isNaN(principal) && principal > 0 && !isNaN(interest) && interest >= 0) {
+                    if (loanType === 'interest_only' || loanType === 'gold') {
+                        const monthlyInterest = principal * (interest / 100);
+                        installmentAmountInput.value = monthlyInterest.toFixed(2);
+                        totalRepayableInput.value = principal.toFixed(2);
+                    } else if (!isNaN(tenure) && tenure > 0) {
+                        const totalRepayable = principal * (1 + (interest / 100));
+                        const installment = totalRepayable / tenure;
+                        totalRepayableInput.value = totalRepayable.toFixed(2);
+                        installmentAmountInput.value = installment.toFixed(2);
+                    } else {
+                        totalRepayableInput.value = '';
+                        installmentAmountInput.value = '';
+                    }
                 } else {
                     totalRepayableInput.value = '';
                     installmentAmountInput.value = '';

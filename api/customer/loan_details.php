@@ -130,7 +130,7 @@ if (isset($_SESSION['customer_id'])) {
                         'gold_photo_urls' => $gold_photo_urls,
                         'gold_photos' => $gold_photo_urls,
                         'interest_rate' => (float)$loan_details['interest_rate'],
-                        'tenure_description' => $loan_details['tenure'] . ' ' . ucfirst($loan_details['repayment_cycle']) . ' Payments',
+                        'tenure_description' => (($loan_details['interest_calculation_type'] ?? '') === 'monthly_interest_only') ? 'Monthly (Until Closed)' : ($loan_details['tenure'] . ' ' . ucfirst($loan_details['repayment_cycle']) . ' Payments'),
                         'status' => $loan_details['status'],
                         'application_date' => $loan_details['application_date'],
                         'approval_date' => $loan_details['approval_date'],
