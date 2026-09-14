@@ -25,7 +25,7 @@ if (isset($_SESSION['customer_id'])) {
         $sql_loan = "SELECT
                         l.id, l.loan_amount, l.total_repayable_amount, l.monthly_installment,
                         l.interest_rate, l.tenure, l.repayment_cycle, l.status,
-                        l.application_date, l.approval_date, l.notes as admin_notes,
+                        l.application_date, l.approval_date, l.loan_start_date, l.notes as admin_notes,
                         l.loan_type, l.interest_calculation_type, l.gold_weight_grams,
                         l.gold_photo_path, l.gold_rate_per_gram, l.processing_fee
                     FROM loans l
@@ -133,6 +133,7 @@ if (isset($_SESSION['customer_id'])) {
                         'tenure_description' => (($loan_details['interest_calculation_type'] ?? '') === 'monthly_interest_only') ? 'Monthly (Until Closed)' : ($loan_details['tenure'] . ' ' . ucfirst($loan_details['repayment_cycle']) . ' Payments'),
                         'status' => $loan_details['status'],
                         'application_date' => $loan_details['application_date'],
+                        'loan_start_date' => $loan_details['loan_start_date'] ?? $loan_details['approval_date'],
                         'approval_date' => $loan_details['approval_date'],
                         'admin_notes' => $loan_details['admin_notes'],
                         

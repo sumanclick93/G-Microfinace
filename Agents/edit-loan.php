@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $stmt_update = $conn->prepare("
             UPDATE loans 
-            SET loan_amount = ?, interest_rate = ?, tenure = ?, repayment_cycle = ?, total_repayable_amount = ?, monthly_installment = ?, approval_date = ? 
+            SET loan_amount = ?, interest_rate = ?, tenure = ?, repayment_cycle = ?, total_repayable_amount = ?, monthly_installment = ?, loan_start_date = ? 
             WHERE id = ? AND agent_id = ? AND status = 'pending'
         ");
         $stmt_update->bind_param("ddisddsii", $loan_amount, $interest_rate, $tenure, $repayment_cycle, $total_repayable, $monthly_installment, $start_date, $loan_id, $agent_id);
@@ -149,7 +149,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                                             <div class="mb-4">
                                                 <label class="form-label-title mb-2">Loan Start Date</label>
-                                                <input class="form-control" type="date" name="start_date" value="<?php echo htmlspecialchars(date('Y-m-d', strtotime($loan_data['approval_date']))); ?>" required>
+                                                <?php 
+                                                    $curr_start = !empty($loan_data['loan_start_date']) ? $loan_data['loan_start_date'] : (!empty($loan_data['approval_date']) ? $loan_data['approval_date'] : date('Y-m-d'));
+                                                ?>
+                                                <input class="form-control" type="date" name="start_date" value="<?php echo htmlspecialchars(date('Y-m-d', strtotime($curr_start))); ?>" required>
                                             </div>
                                             
                                             <div class="col-md-6 mb-4">

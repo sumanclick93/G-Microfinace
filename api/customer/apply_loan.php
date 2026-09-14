@@ -188,8 +188,8 @@ if (isset($_SESSION['customer_id'])) {
                     loan_amount, interest_rate, tenure, repayment_cycle,
                     total_repayable_amount, monthly_installment, gold_weight_grams,
                     gold_photo_path, gold_rate_per_gram, processing_fee,
-                    status, application_date, approval_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)";
+                    status, application_date, approval_date, loan_start_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, ?)";
 
         $stmt = $conn->prepare($sql);
         $stmt->bind_param(

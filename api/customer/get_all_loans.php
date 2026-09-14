@@ -41,6 +41,8 @@ if (isset($_SESSION['customer_id'])) {
                 l.total_repayable_amount,
                 l.status,
                 l.application_date,
+                l.approval_date,
+                l.loan_start_date,
                 l.tenure,
                 l.repayment_cycle,
                 l.loan_type,

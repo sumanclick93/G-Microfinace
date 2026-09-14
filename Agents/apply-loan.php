@@ -192,8 +192,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     loan_amount, interest_rate, tenure, repayment_cycle, 
                     total_repayable_amount, monthly_installment, gold_weight_grams, 
                     gold_photo_path, gold_rate_per_gram, processing_fee, 
-                    status, application_date, approval_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)";
+                    status, application_date, approval_date, loan_start_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, ?)";
         
         $stmt_insert = $conn->prepare($sql);
         $stmt_insert->bind_param(

@@ -1,14 +1,15 @@
 -- Database Migration Script for Dual-Type Loan System (Gold & Interest-Based Loans)
 -- Database: microfinance_fund
 
--- 1. Update loans table to support loan types, collateral tracking, and interest models
+-- 1. Update loans table to support loan types, collateral tracking, interest models, and start date
 ALTER TABLE loans 
 ADD COLUMN loan_type ENUM('standard', 'interest_only', 'gold') NOT NULL DEFAULT 'standard' AFTER id,
 ADD COLUMN interest_calculation_type ENUM('flat_total', 'monthly_interest_only') NOT NULL DEFAULT 'flat_total' AFTER loan_type,
 ADD COLUMN gold_weight_grams DECIMAL(10,3) DEFAULT NULL AFTER tenure,
 ADD COLUMN gold_photo_path VARCHAR(255) DEFAULT NULL AFTER gold_weight_grams,
 ADD COLUMN gold_rate_per_gram DECIMAL(10,2) DEFAULT NULL AFTER gold_photo_path,
-ADD COLUMN processing_fee DECIMAL(10,2) DEFAULT 0.00 AFTER gold_rate_per_gram;
+ADD COLUMN processing_fee DECIMAL(10,2) DEFAULT 0.00 AFTER gold_rate_per_gram,
+ADD COLUMN loan_start_date DATE DEFAULT NULL AFTER approval_date;
 
 -- 2. Create global settings table for dynamic admin-controlled parameters
 CREATE TABLE IF NOT EXISTS system_settings (

@@ -242,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $conn->begin_transaction();
             try {
                 // Step A: Update loan status to 'active'
-                $update_loan_stmt = $conn->prepare("UPDATE loans SET status = 'active', approval_date = COALESCE(approval_date, NOW()) WHERE id = ?");
+                $update_loan_stmt = $conn->prepare("UPDATE loans SET status = 'active', approval_date = NOW(), loan_start_date = COALESCE(loan_start_date, DATE(NOW())) WHERE id = ?");
                 $update_loan_stmt->bind_param("i", $loan_id);
                 $update_loan_stmt->execute();
 
@@ -338,10 +338,16 @@ if (in_array($status_clean, ['closed', 'paid'])) {
         $paid_emis_count = (int)$loan['tenure'];
     }
 } else {
-    $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $loan['total_repayable_amount']) * 100 : 0;
-    if (!$is_monthly_interest && $loan['monthly_installment'] > 0) {
-        $calc_emis = (int)floor($total_paid / (float)$loan['monthly_installment']);
-        $paid_emis_count = min((int)$loan['tenure'], max($paid_emis_count, $calc_emis));
+    if ($is_monthly_interest) {
+        $remaining_balance = (float)$loan['loan_amount'];
+        $progress_percentage = 100;
+    } else {
+        $remaining_balance = max(0, $loan['total_repayable_amount'] - $total_paid);
+        $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $loan['total_repayable_amount']) * 100 : 0;
+        if ($loan['monthly_installment'] > 0) {
+            $calc_emis = (int)floor($total_paid / (float)$loan['monthly_installment']);
+            $paid_emis_count = min((int)$loan['tenure'], max($paid_emis_count, $calc_emis));
+        }
     }
 }
 ?>
@@ -389,6 +395,9 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                          <li class="list-group-item d-flex justify-content-between"><strong><?php echo $is_monthly_interest ? 'Monthly Interest:' : 'Installment:'; ?></strong> ₹<?php echo number_format($loan['monthly_installment'], 2); ?> <?php if($is_monthly_interest) echo '<small class="text-muted">(Monthly Interest Only)</small>'; ?></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Tenure:</strong> <?php echo $is_monthly_interest ? 'Open-Ended (Monthly)' : ($loan['tenure'] . ' ' . ucfirst($loan['repayment_cycle']) . 's'); ?></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Payments Paid:</strong> <span><strong><?php echo $paid_emis_count; ?></strong> <?php echo $is_monthly_interest ? 'Payment(s)' : ('of ' . $loan['tenure']); ?></span></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Application Date:</strong> <span><?php echo !empty($loan['application_date']) ? date('d M Y, h:i A', strtotime($loan['application_date'])) : 'N/A'; ?></span></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Loan Start Date:</strong> <span><?php echo !empty($loan['loan_start_date']) ? date('d M Y', strtotime($loan['loan_start_date'])) : (!empty($loan['approval_date']) ? date('d M Y', strtotime($loan['approval_date'])) : 'N/A'); ?></span></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Approval Date:</strong> <span><?php echo !empty($loan['approval_date']) ? date('d M Y, h:i A', strtotime($loan['approval_date'])) : 'Pending Approval'; ?></span></li>
                                     </ul>
                                 </div>
                             </div>
@@ -404,34 +413,22 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                      </ul>
 
                                      <?php
-                                         $raw_g_photos = !empty($loan['gold_photo_path']) ? array_filter(explode(',', $loan['gold_photo_path'])) : [];
-                                         $resolved_g_photos = [];
-                                         foreach ($raw_g_photos as $p_item) {
+                                         $raw_photos = !empty($loan['gold_photo_path']) ? array_filter(explode(',', $loan['gold_photo_path'])) : [];
+                                         $resolved_photos = [];
+                                         foreach ($raw_photos as $p_item) {
                                              $p_item = trim($p_item);
                                              if (empty($p_item)) continue;
-                                             if (strpos($p_item, 'http') === 0) {
-                                                 $resolved_g_photos[] = $p_item;
-                                             } else {
-                                                 $rel_path = (strpos($p_item, 'Agents/') === 0) ? '../' . $p_item : '../Agents/' . ltrim($p_item, '/');
-                                                 $url_path = $rel_path;
-                                                 if (!file_exists(__DIR__ . '/' . $rel_path)) {
-                                                     if (strpos($rel_path, '/upload/') !== false) {
-                                                         $alt_path = str_replace('/upload/', '/uploads/', $rel_path);
-                                                         if (file_exists(__DIR__ . '/' . $alt_path)) $url_path = $alt_path;
-                                                     } elseif (strpos($rel_path, '/uploads/') !== false) {
-                                                         $alt_path = str_replace('/uploads/', '/upload/', $rel_path);
-                                                         if (file_exists(__DIR__ . '/' . $alt_path)) $url_path = $alt_path;
-                                                     }
-                                                 }
-                                                 $resolved_g_photos[] = $url_path;
-                                             }
+                                             if (strpos($p_item, 'Super/') === 0) $p_item = substr($p_item, 6);
+                                             if (strpos($p_item, 'Agents/') === 0) $p_item = '../' . $p_item;
+                                             elseif (strpos($p_item, '../') !== 0 && strpos($p_item, 'http') !== 0) $p_item = '../Agents/' . ltrim($p_item, '/');
+                                             $resolved_photos[] = $p_item;
                                          }
                                      ?>
 
-                                     <h6 class="font-weight-bold text-dark mb-2">Gold Collateral Photos (<?php echo count($resolved_g_photos); ?>)</h6>
-                                     <?php if (!empty($resolved_g_photos)): ?>
+                                     <h6 class="font-weight-bold text-dark mb-2">Gold Collateral Photos (<?php echo count($resolved_photos); ?>)</h6>
+                                     <?php if (!empty($resolved_photos)): ?>
                                          <div class="d-flex flex-wrap gap-2 mb-3">
-                                             <?php foreach ($resolved_g_photos as $idx => $p_url): ?>
+                                             <?php foreach ($resolved_photos as $idx => $p_url): ?>
                                                  <div class="text-center p-1 border rounded bg-white" style="width: 110px;">
                                                      <a href="<?php echo htmlspecialchars($p_url); ?>" target="_blank">
                                                          <img src="<?php echo htmlspecialchars($p_url); ?>" alt="Photo <?php echo $idx+1; ?>" class="img-thumbnail" style="height: 80px; object-fit: cover; width: 100%;">
@@ -445,7 +442,7 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                      <?php endif; ?>
 
                                      <div class="p-3 bg-light rounded border">
-                                         <label class="form-label font-weight-bold text-dark mb-2"><?php echo empty($resolved_g_photos) ? 'Upload Gold Collateral Photo(s)' : 'Add More Gold Collateral Photo(s)'; ?></label>
+                                         <label class="form-label font-weight-bold text-dark mb-2"><?php echo empty($resolved_photos) ? 'Upload Gold Collateral Photo(s)' : 'Add More Gold Collateral Photo(s)'; ?></label>
                                          <form method="POST" enctype="multipart/form-data" action="admin-loan-details.php?id=<?php echo $loan_id; ?>">
                                              <input type="hidden" name="action" value="upload_gold_photo">
                                              <div class="input-group">
@@ -461,11 +458,13 @@ if (in_array($status_clean, ['closed', 'paid'])) {
 
                             <div class="card">
                                 <div class="card-body">
-                                    <h5 class="card-title mb-2">Customer & Agent</h5>
-                                    <p class="mb-0"><strong>Customer:</strong> <?php echo htmlspecialchars($loan['full_name']); ?></p>
-                                    <p class="mb-0"><i class="ri-phone-line"></i> <?php echo htmlspecialchars($loan['phone']); ?></p>
-                                    <hr>
-                                    <p class="mb-0"><strong>Applied By Agent:</strong> <?php echo htmlspecialchars($loan['agent_first'] . ' ' . $loan['agent_last']); ?></p>
+                                    <h5 class="card-title mb-3">Customer & Agent Details</h5>
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item d-flex justify-content-between"><strong>Customer Name:</strong> <?php echo htmlspecialchars($loan['full_name']); ?></li>
+                                        <li class="list-group-item d-flex justify-content-between"><strong>Assigned Agent:</strong> <?php echo htmlspecialchars(($loan['agent_first'] ?? '') . ' ' . ($loan['agent_last'] ?? '')); ?></li>
+                                        <li class="list-group-item d-flex justify-content-between"><strong>Phone:</strong> <?php echo htmlspecialchars($loan['phone']); ?></li>
+                                        <li class="list-group-item d-flex justify-content-between"><strong>Email:</strong> <?php echo htmlspecialchars($loan['email']); ?></li>
+                                    </ul>
                                 </div>
                             </div>
                             
@@ -514,7 +513,7 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                     </div>
                                 </div>
                             </div>
-                            <?php elseif (!in_array($status_clean, ['rejected', 'paid', 'closed', 'premature-closed']) && $total_paid < (float)$loan['total_repayable_amount'] - 0.01): ?>
+                            <?php elseif (!in_array($status_clean, ['rejected', 'paid', 'closed', 'premature-closed']) && ($is_monthly_interest || $total_paid < (float)$loan['total_repayable_amount'] - 0.01)): ?>
                             <div class="card">
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">Account Management</h5>
@@ -523,7 +522,7 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                             </div>
                             <?php endif; ?>
 
-                            <?php if (in_array($status_clean, ['rejected', 'paid', 'closed', 'premature-closed']) || $total_paid >= (float)$loan['total_repayable_amount'] - 0.01): ?>
+                            <?php if (in_array($status_clean, ['rejected', 'paid', 'closed', 'premature-closed']) || (!$is_monthly_interest && $total_paid >= (float)$loan['total_repayable_amount'] - 0.01)): ?>
                             <div class="card">
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">Admin Actions</h5>
@@ -541,8 +540,8 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                         <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo $progress_percentage; ?>%;"><?php echo round($progress_percentage); ?>%</div>
                                      </div>
                                      <div class="d-flex justify-content-between">
-                                        <span><strong>Paid:</strong> ₹<?php echo number_format($total_paid, 2); ?></span>
-                                        <span><strong>Total:</strong> ₹<?php echo number_format($loan['total_repayable_amount'], 2); ?></span>
+                                        <span><strong><?php echo $is_monthly_interest ? 'Total Interest Paid:' : 'Paid:'; ?></strong> ₹<?php echo number_format($total_paid, 2); ?></span>
+                                        <span><strong><?php echo $is_monthly_interest ? 'Principal Outstanding:' : 'Total:'; ?></strong> ₹<?php echo number_format($is_monthly_interest ? $loan['loan_amount'] : $loan['total_repayable_amount'], 2); ?></span>
                                      </div>
                                 </div>
                             </div>

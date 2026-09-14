@@ -30,6 +30,23 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Auto-ensure loan_start_date column exists in loans table
+if (isset($conn) && $conn instanceof mysqli) {
+    static $loan_start_date_ensured = false;
+    if (!$loan_start_date_ensured) {
+        $loan_start_date_ensured = true;
+        try {
+            $colCheck = $conn->query("SHOW COLUMNS FROM loans LIKE 'loan_start_date'");
+            if ($colCheck && $colCheck->num_rows === 0) {
+                $conn->query("ALTER TABLE loans ADD COLUMN loan_start_date DATE DEFAULT NULL AFTER approval_date");
+                $conn->query("UPDATE loans SET loan_start_date = DATE(approval_date) WHERE loan_start_date IS NULL AND approval_date IS NOT NULL");
+            }
+        } catch (Throwable $e) {
+            // Ignore error if table doesn't exist yet or column already exists
+        }
+    }
+}
+
 if (!function_exists('get_system_setting')) {
     function get_system_setting($conn, $key, $default = '') {
         $stmt = $conn->prepare("SELECT setting_value FROM system_settings WHERE setting_key = ?");

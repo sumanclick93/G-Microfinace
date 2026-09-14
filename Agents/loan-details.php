@@ -48,13 +48,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount_paid'])) {
             $stmt_wallet->bind_param("iiids", $agent_id, $loan_id, $new_payment_id, $amount_paid, $description);
             $stmt_wallet->execute();
             
-            // Step C: Check if the loan is now fully paid
+            // Step C: Check if the loan is now fully paid (only for flat total standard loans)
             $total_paid_query = $conn->query("SELECT SUM(amount_paid) as total FROM payments WHERE loan_id = $loan_id");
             $total_paid = $total_paid_query->fetch_assoc()['total'];
-            $loan_details_query = $conn->query("SELECT total_repayable_amount FROM loans WHERE id = $loan_id");
-            $total_repayable = $loan_details_query->fetch_assoc()['total_repayable_amount'];
+            $loan_details_query = $conn->query("SELECT total_repayable_amount, interest_calculation_type FROM loans WHERE id = $loan_id");
+            $loan_meta = $loan_details_query->fetch_assoc();
+            $total_repayable = $loan_meta['total_repayable_amount'];
+            $calc_type = $loan_meta['interest_calculation_type'] ?? 'flat_total';
 
-            if ($total_paid >= $total_repayable) {
+            if ($calc_type === 'flat_total' && $total_paid >= $total_repayable) {
                 $conn->query("UPDATE loans SET status = 'paid' WHERE id = $loan_id");
             }
 
@@ -247,11 +249,16 @@ if (in_array($status_clean, ['closed', 'paid'])) {
         $paid_emis_count = (int)$loan['tenure'];
     }
 } else {
-    $remaining_balance = max(0, $loan['total_repayable_amount'] - $total_paid);
-    $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $loan['total_repayable_amount']) * 100 : 0;
-    if (!$is_monthly_interest && $loan['monthly_installment'] > 0) {
-        $calc_emis = (int)floor($total_paid / (float)$loan['monthly_installment']);
-        $paid_emis_count = min((int)$loan['tenure'], max($paid_emis_count, $calc_emis));
+    if ($is_monthly_interest) {
+        $remaining_balance = (float)$loan['loan_amount'];
+        $progress_percentage = 100;
+    } else {
+        $remaining_balance = max(0, $loan['total_repayable_amount'] - $total_paid);
+        $progress_percentage = ($loan['total_repayable_amount'] > 0) ? ($total_paid / $loan['total_repayable_amount']) * 100 : 0;
+        if ($loan['monthly_installment'] > 0) {
+            $calc_emis = (int)floor($total_paid / (float)$loan['monthly_installment']);
+            $paid_emis_count = min((int)$loan['tenure'], max($paid_emis_count, $calc_emis));
+        }
     }
 }
 ?>
@@ -300,6 +307,9 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                          <li class="list-group-item d-flex justify-content-between"><strong><?php echo $is_monthly_interest ? 'Monthly Interest:' : 'Installment:'; ?></strong> ₹<?php echo number_format($loan['monthly_installment'], 2); ?> <?php if($is_monthly_interest) echo '<small class="text-muted">(Monthly Interest Only)</small>'; ?></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Tenure:</strong> <?php echo $is_monthly_interest ? 'Open-Ended (Monthly)' : ($loan['tenure'] . ' ' . ucfirst($loan['repayment_cycle']) . 's'); ?></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Payments Paid:</strong> <span><strong><?php echo $paid_emis_count; ?></strong> <?php echo $is_monthly_interest ? 'Payment(s)' : ('of ' . $loan['tenure']); ?></span></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Application Date:</strong> <span><?php echo !empty($loan['application_date']) ? date('d M Y, h:i A', strtotime($loan['application_date'])) : 'N/A'; ?></span></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Loan Start Date:</strong> <span><?php echo !empty($loan['loan_start_date']) ? date('d M Y', strtotime($loan['loan_start_date'])) : (!empty($loan['approval_date']) ? date('d M Y', strtotime($loan['approval_date'])) : 'N/A'); ?></span></li>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Approval Date:</strong> <span><?php echo !empty($loan['approval_date']) ? date('d M Y, h:i A', strtotime($loan['approval_date'])) : 'Pending Approval'; ?></span></li>
                                      </ul>
                                  </div>
                              </div>
@@ -421,8 +431,8 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                      <h5 class="card-title">Payment Progress</h5>
                                      <div class="progress mb-3" style="height: 25px;"><div class="progress-bar" role="progressbar" style="width: <?php echo $progress_percentage; ?>%;" aria-valuenow="<?php echo $progress_percentage; ?>" aria-valuemin="0" aria-valuemax="100"><?php echo round($progress_percentage); ?>%</div></div>
                                      <ul class="list-group list-group-flush mb-3">
-                                        <li class="list-group-item d-flex justify-content-between text-success"><strong>Total Paid:</strong> ₹<?php echo number_format($total_paid, 2); ?></li>
-                                        <li class="list-group-item d-flex justify-content-between text-danger"><strong>Remaining Balance:</strong> ₹<?php echo number_format($remaining_balance, 2); ?></li>
+                                        <li class="list-group-item d-flex justify-content-between text-success"><strong><?php echo $is_monthly_interest ? 'Total Interest Paid:' : 'Total Paid:'; ?></strong> ₹<?php echo number_format($total_paid, 2); ?></li>
+                                        <li class="list-group-item d-flex justify-content-between text-danger"><strong><?php echo $is_monthly_interest ? 'Principal Outstanding:' : 'Remaining Balance:'; ?></strong> ₹<?php echo number_format($remaining_balance, 2); ?></li>
                                     </ul>
                                 </div>
                             </div>
