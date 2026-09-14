@@ -34,10 +34,10 @@ $sql = "SELECT fd.*, IFNULL(c.full_name, 'N/A') as customer_name, IFNULL(c.phone
         WHERE $where_sql 
         ORDER BY fd.id DESC";
 
-$result = $conn->query($sql);
+$fd_result = $conn->query($sql);
 
-if (!$result || $result->num_rows === 0) {
-    $result = $conn->query("SELECT * FROM fixed_deposits ORDER BY id DESC");
+if (!$fd_result || $fd_result->num_rows === 0) {
+    $fd_result = $conn->query("SELECT * FROM fixed_deposits ORDER BY id DESC");
 }
 
 // Stats summary for Admin
@@ -162,8 +162,8 @@ if ($stats_stmt && $stats_stmt instanceof mysqli_result) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                 <?php if ($result && $result->num_rows > 0): ?>
-                                                     <?php while ($row = $result->fetch_assoc()): ?>
+                                                 <?php if ($fd_result && $fd_result->num_rows > 0): ?>
+                                                     <?php while ($row = $fd_result->fetch_assoc()): ?>
                                                          <?php
                                                          if (!isset($row['customer_name'])) {
                                                              $c_id = (int)($row['customer_id'] ?? 0);

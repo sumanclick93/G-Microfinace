@@ -37,13 +37,13 @@ $sql = "SELECT fd.*, IFNULL(c.full_name, 'N/A') as customer_name, IFNULL(c.phone
         WHERE $where_sql 
         ORDER BY fd.id DESC";
 
-$result = $conn->query($sql);
+$fd_result = $conn->query($sql);
 
-if (!$result || $result->num_rows === 0) {
+if (!$fd_result || $fd_result->num_rows === 0) {
     $fallback_sql = "SELECT * FROM fixed_deposits WHERE agent_id = $agent_id_clean OR agent_id IS NULL OR agent_id = 0 ORDER BY id DESC";
-    $result = $conn->query($fallback_sql);
-    if (!$result || $result->num_rows === 0) {
-        $result = $conn->query("SELECT * FROM fixed_deposits ORDER BY id DESC");
+    $fd_result = $conn->query($fallback_sql);
+    if (!$fd_result || $fd_result->num_rows === 0) {
+        $fd_result = $conn->query("SELECT * FROM fixed_deposits ORDER BY id DESC");
     }
 }
 
@@ -171,8 +171,8 @@ if ($stats_stmt) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                 <?php if ($result && $result->num_rows > 0): ?>
-                                                     <?php while ($row = $result->fetch_assoc()): ?>
+                                                 <?php if ($fd_result && $fd_result->num_rows > 0): ?>
+                                                     <?php while ($row = $fd_result->fetch_assoc()): ?>
                                                          <?php
                                                          if (!isset($row['customer_name'])) {
                                                              $c_id = (int)($row['customer_id'] ?? 0);
