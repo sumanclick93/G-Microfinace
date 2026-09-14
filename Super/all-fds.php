@@ -36,6 +36,10 @@ $sql = "SELECT fd.*, IFNULL(c.full_name, 'N/A') as customer_name, IFNULL(c.phone
 
 $result = $conn->query($sql);
 
+if (!$result || $result->num_rows === 0) {
+    $result = $conn->query("SELECT * FROM fixed_deposits ORDER BY id DESC");
+}
+
 // Stats summary for Admin
 $stats = ['total_count' => 0, 'active_amount' => 0, 'pending_count' => 0, 'matured_count' => 0];
 $stats_stmt = $conn->query("SELECT 
@@ -159,8 +163,30 @@ if ($stats_stmt && $stats_stmt instanceof mysqli_result) {
                                             </thead>
                                             <tbody>
                                                  <?php if ($result && $result->num_rows > 0): ?>
-                                                    <?php while ($row = $result->fetch_assoc()): ?>
-                                                        <tr>
+                                                     <?php while ($row = $result->fetch_assoc()): ?>
+                                                         <?php
+                                                         if (!isset($row['customer_name'])) {
+                                                             $c_id = (int)($row['customer_id'] ?? 0);
+                                                             $c_q = $conn->query("SELECT full_name, phone FROM customers WHERE id = $c_id");
+                                                             if ($c_q && $c_row = $c_q->fetch_assoc()) {
+                                                                 $row['customer_name'] = $c_row['full_name'];
+                                                                 $row['customer_phone'] = $c_row['phone'];
+                                                             } else {
+                                                                 $row['customer_name'] = 'Customer #' . $c_id;
+                                                                 $row['customer_phone'] = '';
+                                                             }
+                                                         }
+                                                         if (!isset($row['agent_name'])) {
+                                                             $a_id = (int)($row['agent_id'] ?? 0);
+                                                             $a_q = $conn->query("SELECT first_name, last_name FROM agents WHERE id = $a_id");
+                                                             if ($a_q && $a_row = $a_q->fetch_assoc()) {
+                                                                 $row['agent_name'] = trim($a_row['first_name'] . ' ' . ($a_row['last_name'] ?? ''));
+                                                             } else {
+                                                                 $row['agent_name'] = 'Direct';
+                                                             }
+                                                         }
+                                                         ?>
+                                                         <tr>
                                                             <td class="fw-bold">
                                                                 <a href="admin-fd-details.php?id=<?php echo $row['id']; ?>" class="text-primary"><?php echo htmlspecialchars($row['fd_number']); ?></a>
                                                             </td>

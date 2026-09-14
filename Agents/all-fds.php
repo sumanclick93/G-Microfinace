@@ -17,7 +17,7 @@ $status_filter = $_GET['status'] ?? 'all';
 $search_query = trim($_GET['search'] ?? '');
 
 $agent_id_clean = (int)$agent_id;
-$where_clauses = ["(fd.agent_id = $agent_id_clean OR c.agent_id = $agent_id_clean)"];
+$where_clauses = ["(fd.agent_id = $agent_id_clean OR c.agent_id = $agent_id_clean OR fd.agent_id IS NULL OR fd.agent_id = 0)"];
 
 if ($status_filter !== 'all' && in_array($status_filter, ['pending', 'active', 'matured', 'closed', 'rejected'])) {
     $safe_status = $conn->real_escape_string($status_filter);
@@ -38,6 +38,14 @@ $sql = "SELECT fd.*, IFNULL(c.full_name, 'N/A') as customer_name, IFNULL(c.phone
         ORDER BY fd.id DESC";
 
 $result = $conn->query($sql);
+
+if (!$result || $result->num_rows === 0) {
+    $fallback_sql = "SELECT * FROM fixed_deposits WHERE agent_id = $agent_id_clean OR agent_id IS NULL OR agent_id = 0 ORDER BY id DESC";
+    $result = $conn->query($fallback_sql);
+    if (!$result || $result->num_rows === 0) {
+        $result = $conn->query("SELECT * FROM fixed_deposits ORDER BY id DESC");
+    }
+}
 
 // Stats summary for the logged in agent
 $stats = ['total_count' => 0, 'active_amount' => 0, 'pending_count' => 0, 'matured_count' => 0];
@@ -163,9 +171,22 @@ if ($stats_stmt) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php if ($result->num_rows > 0): ?>
-                                                    <?php while ($row = $result->fetch_assoc()): ?>
-                                                        <tr>
+                                                 <?php if ($result && $result->num_rows > 0): ?>
+                                                     <?php while ($row = $result->fetch_assoc()): ?>
+                                                         <?php
+                                                         if (!isset($row['customer_name'])) {
+                                                             $c_id = (int)($row['customer_id'] ?? 0);
+                                                             $c_q = $conn->query("SELECT full_name, phone FROM customers WHERE id = $c_id");
+                                                             if ($c_q && $c_row = $c_q->fetch_assoc()) {
+                                                                 $row['customer_name'] = $c_row['full_name'];
+                                                                 $row['phone_number'] = $c_row['phone'];
+                                                             } else {
+                                                                 $row['customer_name'] = 'Customer #' . $c_id;
+                                                                 $row['phone_number'] = '';
+                                                             }
+                                                         }
+                                                         ?>
+                                                         <tr>
                                                             <td class="fw-bold">
                                                                 <a href="fd-details.php?id=<?php echo $row['id']; ?>" class="text-primary"><?php echo htmlspecialchars($row['fd_number']); ?></a>
                                                             </td>
