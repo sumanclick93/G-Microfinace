@@ -93,6 +93,70 @@ if ($customer_id) {
                     }
                     $gold_photo_url = !empty($gold_photo_urls) ? $gold_photo_urls[0] : null;
 
+                    // --- Calculate Pending EMI & Interest Details for All Loan Types ---
+                    $is_monthly_interest = (($loan_details['interest_calculation_type'] ?? '') === 'monthly_interest_only');
+                    $emi_amount = (float)($loan_details['monthly_installment'] ?? 0);
+                    $loan_amt = (float)($loan_details['loan_amount'] ?? 0);
+                    $int_rate = (float)($loan_details['interest_rate'] ?? 0);
+
+                    if ($emi_amount <= 0 && $loan_amt > 0 && $int_rate > 0) {
+                        $emi_amount = round(($loan_amt * $int_rate) / 100, 2);
+                    }
+
+                    $accrued_months = 0;
+                    $total_accrued_interest = 0.0;
+                    $pending_interest_due = 0.0;
+                    $pending_emis_count = 0;
+                    $pending_amount = 0.0;
+                    $total_emi = (int)($loan_details['tenure'] ?? 0);
+                    $st_clean = strtolower(trim($loan_details['status'] ?? ''));
+
+                    if ($is_monthly_interest) {
+                        $start_date_val = !empty($loan_details['loan_start_date']) ? $loan_details['loan_start_date'] : (!empty($loan_details['approval_date']) ? $loan_details['approval_date'] : $loan_details['application_date']);
+
+                        if (!empty($start_date_val) && !in_array($st_clean, ['rejected', 'pending'])) {
+                            $start_dt = new DateTime($start_date_val);
+                            $today_dt = new DateTime();
+
+                            if ($today_dt >= $start_dt) {
+                                $ys = (int)$start_dt->format('Y');
+                                $ms = (int)$start_dt->format('m');
+                                $yt = (int)$today_dt->format('Y');
+                                $mt = (int)$today_dt->format('m');
+
+                                $accrued_months = ($yt - $ys) * 12 + ($mt - $ms) + 1;
+                                if ($accrued_months < 0) $accrued_months = 0;
+                            }
+                        }
+
+                        if (in_array($st_clean, ['closed', 'paid'])) {
+                            $pending_interest_due = 0.0;
+                            $pending_emis_count = 0;
+                            $pending_amount = 0.0;
+                            $total_accrued_interest = (float)$total_paid;
+                        } else {
+                            $total_accrued_interest = $accrued_months * $emi_amount;
+                            $pending_interest_due = max(0, $total_accrued_interest - $total_paid);
+                            $paid_months_calc = ($emi_amount > 0) ? (int)floor($total_paid / $emi_amount) : 0;
+                            $pending_emis_count = max(0, $accrued_months - $paid_months_calc);
+                            $pending_amount = round($pending_interest_due, 2);
+                        }
+                        $total_emi = $accrued_months;
+                        $remaining_balance = 0.00;
+                    } else {
+                        $remaining_balance = max(0, (float)$loan_details['total_repayable_amount'] - $total_paid);
+                        if (in_array($st_clean, ['closed', 'paid'])) {
+                            $pending_emis_count = 0;
+                            $pending_amount = 0.0;
+                        } else {
+                            $paid_months_calc = ($emi_amount > 0) ? (int)floor($total_paid / $emi_amount) : $no_of_paid_emi;
+                            $pending_emis_count = max(0, $total_emi - $paid_months_calc);
+                            $pending_amount = round($pending_emis_count * $emi_amount, 2);
+                        }
+                    }
+
+                    $pending_emi_description = $pending_emis_count . ' Pending EMI(s) (₹' . number_format($pending_amount, 2) . ')';
+
                     $response = [
                         'status' => 'success',
                         'data' => [
@@ -101,7 +165,8 @@ if ($customer_id) {
                             'interest_calculation_type' => $loan_details['interest_calculation_type'] ?? 'flat_total',
                             'loan_amount' => (float)$loan_details['loan_amount'],
                             'total_repayable_amount' => (float)$loan_details['total_repayable_amount'],
-                            'monthly_installment' => (float)$loan_details['monthly_installment'],
+                            'monthly_installment' => $emi_amount,
+                            'emi_amount' => $emi_amount,
                             'processing_fee' => (float)$loan_details['processing_fee'],
                             'gold_weight_grams' => $gold_weight,
                             'gold_rate_per_gram' => $gold_rate,
@@ -118,8 +183,15 @@ if ($customer_id) {
                             'admin_notes' => $loan_details['admin_notes'],
                             'total_paid' => round($total_paid, 2),
                             'remaining_balance' => round($remaining_balance, 2),
-                            'total_emi' => (int)$loan_details['tenure'],
+                            'total_emi' => $total_emi,
                             'no_of_paid_emi' => $no_of_paid_emi,
+                            'no_of_pending_emi' => $pending_emis_count,
+                            'pending_emis_count' => $pending_emis_count,
+                            'pending_amount' => $pending_amount,
+                            'pending_interest_due' => round($pending_interest_due, 2),
+                            'pending_emi_description' => $pending_emi_description,
+                            'accrued_months' => $accrued_months,
+                            'total_accrued_interest' => round($total_accrued_interest, 2),
                             'payments' => $payments
                         ]
                     ];
