@@ -1,4 +1,7 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 include('config.php');
 date_default_timezone_set('Asia/Kolkata');
 
@@ -38,9 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 }
 
 // Fetch Pending FDs
-$sql = "SELECT fd.*, c.full_name as customer_name, c.phone_number as customer_phone, a.full_name as agent_name 
+$sql = "SELECT fd.*, IFNULL(c.full_name, 'N/A') as customer_name, IFNULL(c.phone, '') as customer_phone, CONCAT(a.first_name, ' ', IFNULL(a.last_name, '')) as agent_name 
         FROM fixed_deposits fd 
-        JOIN customers c ON fd.customer_id = c.id 
+        LEFT JOIN customers c ON fd.customer_id = c.id 
         LEFT JOIN agents a ON fd.agent_id = a.id 
         WHERE fd.status = 'pending' 
         ORDER BY fd.id DESC";

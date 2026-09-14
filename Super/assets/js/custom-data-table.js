@@ -165,15 +165,21 @@ $(document).ready(function () {
             // Prepend S.No. column to the head row
             $table.find('thead tr').prepend('<th class="sno-col" style="width: 60px; font-weight: 600;">S.No.</th>');
             
-            // Prepend an empty cell to all body rows
+            // Prepend an empty cell to all body rows, and remove dummy empty/no-data colspan rows
             $table.find('tbody tr').each(function () {
                 var $row = $(this);
                 if ($row.find('td').length > 1) {
                     $row.prepend('<td class="sno-cell" style="font-weight: 500;"></td>');
                 } else if ($row.find('td').length === 1 && $row.find('td').attr('colspan')) {
-                    // Update colspan for no-data / empty rows
-                    var colSpan = parseInt($row.find('td').attr('colspan'));
-                    $row.find('td').attr('colspan', colSpan + 1);
+                    $row.remove();
+                }
+            });
+        } else {
+            // Even if table already has serial header, clear any dummy empty/no-data colspan rows
+            $table.find('tbody tr').each(function () {
+                var $row = $(this);
+                if ($row.find('td').length === 1 && $row.find('td').attr('colspan')) {
+                    $row.remove();
                 }
             });
         }

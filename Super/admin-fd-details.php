@@ -1,4 +1,7 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 include('config.php');
 date_default_timezone_set('Asia/Kolkata');
 
@@ -83,19 +86,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 
 // Fetch FD Details
 $sql = "SELECT fd.*, 
-        c.full_name as customer_name, c.phone_number as customer_phone, c.email as customer_email, c.address as customer_address,
-        a.full_name as agent_name, a.agent_code
+        IFNULL(c.full_name, 'N/A') as customer_name, IFNULL(c.phone, '') as customer_phone, c.email as customer_email, c.address as customer_address,
+        CONCAT(a.first_name, ' ', IFNULL(a.last_name, '')) as agent_name
         FROM fixed_deposits fd
-        JOIN customers c ON fd.customer_id = c.id
+        LEFT JOIN customers c ON fd.customer_id = c.id
         LEFT JOIN agents a ON fd.agent_id = a.id
         WHERE fd.id = ?";
 
+$res = false;
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $fd_id);
-$stmt->execute();
-$res = $stmt->get_result();
+if ($stmt) {
+    $stmt->bind_param("i", $fd_id);
+    if ($stmt->execute()) {
+        $res = $stmt->get_result();
+    }
+}
 
-if ($res->num_rows == 0) {
+if (!$res || $res->num_rows == 0) {
     header("Location: all-fds.php");
     exit();
 }
@@ -235,7 +242,7 @@ $payouts_res = $stmt_p->get_result();
                                     
                                     <small class="text-muted d-block mb-1">Managed By Agent</small>
                                     <div class="fw-bold"><?php echo htmlspecialchars($fd['agent_name'] ?? 'Direct Admin'); ?></div>
-                                    <small class="text-muted">Code: <?php echo htmlspecialchars($fd['agent_code'] ?? 'N/A'); ?></small>
+                                    <small class="text-muted">Agent ID: #<?php echo htmlspecialchars($fd['agent_id'] ?? 'N/A'); ?></small>
                                 </div>
                             </div>
                         </div>

@@ -1,4 +1,7 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 include('config.php');
 date_default_timezone_set('Asia/Kolkata');
 
@@ -48,7 +51,7 @@ $fds_res = $stmt_fd->get_result();
                         <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div>
                                 <h4 class="mb-1"><i class="ri-bank-line me-2"></i>Fixed Deposits for <?php echo htmlspecialchars($customer['full_name']); ?></h4>
-                                <p class="text-muted mb-0">Phone: <?php echo htmlspecialchars($customer['phone_number']); ?> | Customer ID: #<?php echo $customer['id']; ?></p>
+                                <p class="text-muted mb-0">Phone: <?php echo htmlspecialchars($customer['phone']); ?> | Customer ID: #<?php echo $customer['id']; ?></p>
                             </div>
                             <div>
                                 <a href="apply-fd.php?customer_id=<?php echo $customer_id; ?>" class="btn btn-primary"><i class="ri-add-line me-1"></i> Apply FD for Customer</a>

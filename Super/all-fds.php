@@ -1,4 +1,7 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 include('config.php');
 date_default_timezone_set('Asia/Kolkata');
 
@@ -21,7 +24,7 @@ if ($status_filter !== 'all' && in_array($status_filter, ['pending', 'active', '
 }
 
 if (!empty($search_query)) {
-    $where_clauses[] = "(c.full_name LIKE ? OR c.phone_number LIKE ? OR fd.fd_number LIKE ? OR a.full_name LIKE ?)";
+    $where_clauses[] = "(c.full_name LIKE ? OR c.phone LIKE ? OR fd.fd_number LIKE ? OR CONCAT(a.first_name, ' ', IFNULL(a.last_name, '')) LIKE ?)";
     $like_str = "%" . $search_query . "%";
     $params[] = $like_str;
     $params[] = $like_str;
@@ -32,28 +35,35 @@ if (!empty($search_query)) {
 
 $where_sql = implode(" AND ", $where_clauses);
 
-$sql = "SELECT fd.*, c.full_name as customer_name, c.phone_number as customer_phone, a.full_name as agent_name 
+$sql = "SELECT fd.*, IFNULL(c.full_name, 'N/A') as customer_name, IFNULL(c.phone, '') as customer_phone, CONCAT(a.first_name, ' ', IFNULL(a.last_name, '')) as agent_name 
         FROM fixed_deposits fd 
-        JOIN customers c ON fd.customer_id = c.id 
+        LEFT JOIN customers c ON fd.customer_id = c.id 
         LEFT JOIN agents a ON fd.agent_id = a.id 
         WHERE $where_sql 
         ORDER BY fd.id DESC";
 
+$result = false;
 $stmt = $conn->prepare($sql);
-if (!empty($types)) {
-    $stmt->bind_param($types, ...$params);
+if ($stmt) {
+    if (!empty($types)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    if ($stmt->execute()) {
+        $result = $stmt->get_result();
+    }
 }
-$stmt->execute();
-$result = $stmt->get_result();
 
 // Stats summary for Admin
+$stats = ['total_count' => 0, 'active_amount' => 0, 'pending_count' => 0, 'matured_count' => 0];
 $stats_stmt = $conn->query("SELECT 
     COUNT(*) as total_count,
     SUM(CASE WHEN status = 'active' THEN deposit_amount ELSE 0 END) as active_amount,
     SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count,
     SUM(CASE WHEN status = 'matured' THEN 1 ELSE 0 END) as matured_count
     FROM fixed_deposits");
-$stats = $stats_stmt->fetch_assoc();
+if ($stats_stmt && $stats_stmt instanceof mysqli_result) {
+    $stats = $stats_stmt->fetch_assoc() ?? $stats;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -148,7 +158,7 @@ $stats = $stats_stmt->fetch_assoc();
                             <div class="card">
                                 <div class="card-body p-0">
                                     <div class="table-responsive">
-                                        <table class="table table-hover align-middle mb-0">
+                                        <table class="table all-package theme-table" id="table_id">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th>FD Number</th>
@@ -165,7 +175,7 @@ $stats = $stats_stmt->fetch_assoc();
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php if ($result->num_rows > 0): ?>
+                                                 <?php if ($result && $result->num_rows > 0): ?>
                                                     <?php while ($row = $result->fetch_assoc()): ?>
                                                         <tr>
                                                             <td class="fw-bold">

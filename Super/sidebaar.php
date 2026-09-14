@@ -128,7 +128,7 @@
                     </li>
                     <li class="sidebar-list">
                         <a class="sidebar-link sidebar-title link-nav" href="pending-fd-payments.php">
-                            <i data-feather="time"></i>
+                            <i data-feather="clock"></i>
                             <span>Pending FD Payments</span>
                         </a>
                     </li>

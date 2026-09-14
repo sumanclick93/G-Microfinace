@@ -34,8 +34,8 @@ if (isset($_SESSION['customer_id'])) {
 
     $sql = "SELECT 
                 fd.*,
-                a.full_name as agent_name,
-                a.phone_number as agent_phone
+                CONCAT(a.first_name, ' ', IFNULL(a.last_name, '')) as agent_name,
+                a.phone as agent_phone
             FROM fixed_deposits fd
             LEFT JOIN agents a ON fd.agent_id = a.id
             WHERE fd.id = ? AND fd.customer_id = ?";
