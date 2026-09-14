@@ -11,8 +11,8 @@ $agent_id   = intval($_SESSION['collection_agent_id']);
 $agent_name = $_SESSION['collection_agent_name'] ?? 'Agent';
 
 $total_customers = ($conn->query("SELECT COUNT(id) as total FROM customers WHERE agent_id = $agent_id")->fetch_assoc()['total']) ?? 0;
-$active_loans    = ($conn->query("SELECT COUNT(id) as total FROM loans WHERE agent_id = $agent_id AND status = 'active'")->fetch_assoc()['total']) ?? 0;
-$active_rds      = ($conn->query("SELECT COUNT(id) as total FROM recurring_deposits WHERE agent_id = $agent_id AND status = 'active'")->fetch_assoc()['total']) ?? 0;
+$active_loans    = ($conn->query("SELECT COUNT(l.id) as total FROM loans l JOIN customers c ON l.customer_id = c.id WHERE c.agent_id = $agent_id AND LOWER(TRIM(l.status)) IN ('active', 'approved')")->fetch_assoc()['total']) ?? 0;
+$active_rds      = ($conn->query("SELECT COUNT(rd.id) as total FROM recurring_deposits rd JOIN customers c ON rd.customer_id = c.id WHERE c.agent_id = $agent_id AND LOWER(TRIM(rd.status)) IN ('active', 'approved')")->fetch_assoc()['total']) ?? 0;
 
 // Collection stats from collection mirror tables (same as Collection History)
 $loan_collected = ($conn->query("SELECT COALESCE(SUM(amount_paid), 0) as total FROM loan_payments_collection WHERE collected_by_agent_id = $agent_id")->fetch_assoc()['total']) ?? 0;

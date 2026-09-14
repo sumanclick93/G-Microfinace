@@ -43,6 +43,26 @@
                         </a>
                     </li>
                     <li class="sidebar-list">
+                        <a class="sidebar-link sidebar-title" href="javascript:void(0)">
+                            <i data-feather="list"></i>
+                            <span>Loans</span>
+                        </a>
+                        <ul class="sidebar-submenu">
+                            <li>
+                                <a href="normal-loans.php">Normal Loans</a>
+                            </li>
+                            <li>
+                                <a href="interest-loans.php">Interest Loans</a>
+                            </li>
+                            <li>
+                                <a href="gold-loans.php">Gold Loans</a>
+                            </li>
+                            <li>
+                                <a href="all-loans.php">All Loans</a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li class="sidebar-list">
                         <a class="sidebar-link sidebar-title link-nav" href="collection-history.php">
                             <i data-feather="clock"></i>
                             <span>Collection History</span>

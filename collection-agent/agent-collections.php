@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['selected_accounts']))
                 $db_amount = ($action === 'withdraw') ? -$raw_amount : $raw_amount;
 
                 // Same ledger Super uses (payments) + collection mirror for history
-                // $conn->query("INSERT INTO payments (loan_id, amount_paid, collected_by_agent_id, payment_date, status) VALUES ($account_id, $db_amount, $agent_id, '$logged_time', 'approved')");
+                $conn->query("INSERT INTO payments (loan_id, amount_paid, collected_by_agent_id, payment_date, status) VALUES ($account_id, $db_amount, $agent_id, '$logged_time', 'approved')");
                 $conn->query("INSERT INTO loan_payments_collection (loan_id, amount_paid, collected_by_agent_id, payment_date) VALUES ($account_id, $db_amount, $agent_id, '$logged_time')");
                 $conn->query("INSERT INTO wallet_transactions (agent_id, loan_id, transaction_type, amount, description) VALUES ($agent_id, $account_id, '$trans_type', $db_amount, '$desc')");
                 // Check if the loan is now fully paid (Super-aligned: non-rejected amounts)
@@ -227,6 +227,9 @@ $loans_query = "
         COALESCE(l.tenure, 0) as tenure,
         l.repayment_cycle,
         l.approval_date as start_date,
+        l.loan_type,
+        l.interest_calculation_type,
+        l.gold_weight_grams,
         LOWER(TRIM(l.status)) as loan_status,
         (SELECT COALESCE(SUM(amount_paid), 0) FROM payments WHERE loan_id = l.id AND (status IS NULL OR status != 'rejected')) as total_paid,
         (SELECT COUNT(*) FROM payments WHERE loan_id = l.id AND status = 'approved') as approved_count
@@ -239,15 +242,34 @@ $loans_query = "
 $loans_res = $conn->query($loans_query);
 if ($loans_res && $loans_res->num_rows > 0) {
     while ($row = $loans_res->fetch_assoc()) {
+        $l_type = $row['loan_type'] ?? 'standard';
+        $calc_type = $row['interest_calculation_type'] ?? 'flat_total';
         $target = floatval($row['target_amount']);
         $paid = floatval($row['total_paid']);
-        $remaining = max(0.0, $target - $paid);
+
+        if ($calc_type === 'monthly_interest_only') {
+            $remaining = floatval($row['installment_amount']); // Monthly interest cycle
+        } else {
+            $remaining = max(0.0, $target - $paid);
+        }
+
         $paid_emis = super_paid_emis_count($paid, $row['installment_amount'], $row['tenure'], (int)$row['approved_count']);
-        // Hide fully paid / completed loans even if status wasn't updated
-        if ($remaining > 0.01) { 
+        
+        // Hide fully paid / completed flat-total loans even if status wasn't updated
+        if ($remaining > 0.01 || $calc_type === 'monthly_interest_only') { 
             $row['account_type'] = 'loan';
-            $row['display_type'] = 'Loan EMI';
-            $row['badge_color'] = '#17a2b8';
+            
+            if ($l_type === 'gold') {
+                $row['display_type'] = 'Gold Loan EMI';
+                $row['badge_color'] = '#ffc107';
+            } elseif ($l_type === 'interest_only') {
+                $row['display_type'] = 'Interest Loan';
+                $row['badge_color'] = '#0d6efd';
+            } else {
+                $row['display_type'] = 'Normal Loan EMI';
+                $row['badge_color'] = '#17a2b8';
+            }
+
             $row['paid_emis'] = $paid_emis;
             $pending_info = get_pending_emi(
                 $row['start_date'],
