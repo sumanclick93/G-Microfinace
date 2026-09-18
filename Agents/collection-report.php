@@ -51,22 +51,23 @@ if ($filter_customer !== 'all') {
 
 $where_sql = implode(' AND ', $where_clauses);
 
-// Fetch ALL Detailed Data (Corrected l.loan_amount based on your schema)
+// Fetch ALL Detailed Data (Optimized for maximum speed)
 $details_query = "
     SELECT 
+        t.id as txn_id,
         t.transaction_type, 
         t.amount, 
         t.description, 
         t.transaction_date,
+        t.loan_id,
+        t.rd_id,
         c.full_name as customer_name,
         c.avatar as customer_photo,
-        l.id as loan_id,
         l.status as loan_status,
         l.approval_date as loan_approval_date,
         l.repayment_cycle as loan_repayment_cycle,
         l.tenure as loan_tenure,
         l.monthly_installment as loan_monthly_installment,
-        rd.id as rd_id,
         rd.status as rd_status,
         rd.start_date as rd_start_date,
         rd.repayment_cycle as rd_repayment_cycle,
@@ -75,13 +76,8 @@ $details_query = "
         
         COALESCE(l.loan_amount, 0) as loan_principal,
         COALESCE(l.total_repayable_amount, 0) as loan_maturity,
-        IF(t.loan_id > 0, (SELECT COALESCE(SUM(amount_paid), 0) FROM payments WHERE loan_id = t.loan_id AND status != 'rejected'), 0) as loan_overall_paid,
-        IF(t.loan_id > 0, (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt WHERE wt.loan_id = t.loan_id AND wt.transaction_type = 'emi-received' AND wt.transaction_date <= t.transaction_date), 0) as running_loan_paid,
-        
         COALESCE((rd.deposit_amount * rd.tenure), 0) as rd_principal,
-        COALESCE(rd.maturity_amount, 0) as rd_maturity,
-        IF(t.rd_id > 0, (SELECT COALESCE(SUM(amount_paid), 0) FROM rd_payments WHERE rd_id = t.rd_id AND status != 'rejected'), 0) as rd_overall_paid,
-        IF(t.rd_id > 0, (SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions wt2 WHERE wt2.rd_id = t.rd_id AND wt2.transaction_type = 'rd-received' AND wt2.transaction_date <= t.transaction_date), 0) as running_rd_paid
+        COALESCE(rd.maturity_amount, 0) as rd_maturity
         
     FROM wallet_transactions t
     LEFT JOIN loans l ON t.loan_id = l.id
@@ -93,10 +89,72 @@ $details_query = "
 
 $details_result = null;
 $query_error = '';
+$all_rows = [];
+$loan_ids = [];
+$rd_ids = [];
+
 try {
     $details_result = $conn->query($details_query);
+    if ($details_result && $details_result->num_rows > 0) {
+        while ($r = $details_result->fetch_assoc()) {
+            $all_rows[] = $r;
+            if (!empty($r['loan_id'])) $loan_ids[intval($r['loan_id'])] = true;
+            if (!empty($r['rd_id'])) $rd_ids[intval($r['rd_id'])] = true;
+        }
+    }
 } catch (Throwable $e) {
     $query_error = $e->getMessage();
+}
+
+// Bulk fetch overall totals and cumulative running totals in fast 1-pass queries
+$loan_overall_map = [];
+if (!empty($loan_ids)) {
+    $ids_str = implode(',', array_keys($loan_ids));
+    $res_l = $conn->query("SELECT loan_id, COALESCE(SUM(amount_paid), 0) as total FROM payments WHERE loan_id IN ($ids_str) AND status = 'approved' GROUP BY loan_id");
+    if ($res_l) {
+        while ($r = $res_l->fetch_assoc()) {
+            $loan_overall_map[intval($r['loan_id'])] = floatval($r['total']);
+        }
+    }
+}
+
+$rd_overall_map = [];
+if (!empty($rd_ids)) {
+    $ids_str = implode(',', array_keys($rd_ids));
+    $res_r = $conn->query("SELECT rd_id, COALESCE(SUM(amount_paid), 0) as total FROM rd_payments WHERE rd_id IN ($ids_str) AND status != 'rejected' GROUP BY rd_id");
+    if ($res_r) {
+        while ($r = $res_r->fetch_assoc()) {
+            $rd_overall_map[intval($r['rd_id'])] = floatval($r['total']);
+        }
+    }
+}
+
+$running_loan_map = [];
+if (!empty($loan_ids)) {
+    $ids_str = implode(',', array_keys($loan_ids));
+    $res_wt = $conn->query("SELECT loan_id, amount, transaction_date FROM wallet_transactions WHERE loan_id IN ($ids_str) AND transaction_type = 'emi-received' ORDER BY transaction_date ASC");
+    if ($res_wt) {
+        $cum = [];
+        while ($r = $res_wt->fetch_assoc()) {
+            $lid = intval($r['loan_id']);
+            $cum[$lid] = ($cum[$lid] ?? 0.0) + floatval($r['amount']);
+            $running_loan_map[$lid . '_' . $r['transaction_date']] = $cum[$lid];
+        }
+    }
+}
+
+$running_rd_map = [];
+if (!empty($rd_ids)) {
+    $ids_str = implode(',', array_keys($rd_ids));
+    $res_wt2 = $conn->query("SELECT rd_id, amount, transaction_date FROM wallet_transactions WHERE rd_id IN ($ids_str) AND transaction_type = 'rd-received' ORDER BY transaction_date ASC");
+    if ($res_wt2) {
+        $cum2 = [];
+        while ($r = $res_wt2->fetch_assoc()) {
+            $rid = intval($r['rd_id']);
+            $cum2[$rid] = ($cum2[$rid] ?? 0.0) + floatval($r['amount']);
+            $running_rd_map[$rid . '_' . $r['transaction_date']] = $cum2[$rid];
+        }
+    }
 }
 
 // Process the data in PHP for 100% accurate deduplication
@@ -106,8 +164,17 @@ $summary_stats = [
     'rd-received' => ['txn_count' => 0, 'collected' => 0, 'accounts' => [], 'total_amt' => 0, 'total_mat' => 0, 'total_rem' => 0, 'default_count' => 0, 'default_amount' => 0]
 ];
 
-if ($details_result && $details_result->num_rows > 0) {
-    while ($row = $details_result->fetch_assoc()) {
+if (!empty($all_rows)) {
+    foreach ($all_rows as $row) {
+        $lid = intval($row['loan_id'] ?? 0);
+        $rid = intval($row['rd_id'] ?? 0);
+        $dt = $row['transaction_date'];
+
+        $row['loan_overall_paid'] = $lid > 0 ? ($loan_overall_map[$lid] ?? 0.0) : 0.0;
+        $row['running_loan_paid'] = $lid > 0 ? ($running_loan_map[$lid . '_' . $dt] ?? $row['loan_overall_paid']) : 0.0;
+        
+        $row['rd_overall_paid'] = $rid > 0 ? ($rd_overall_map[$rid] ?? 0.0) : 0.0;
+        $row['running_rd_paid'] = $rid > 0 ? ($running_rd_map[$rid . '_' . $dt] ?? $row['rd_overall_paid']) : 0.0;
         $type = !empty($row['transaction_type']) ? $row['transaction_type'] : 'unknown';
         
         // Save to Itemized Details Map

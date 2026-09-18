@@ -25,7 +25,21 @@ if ($conn->connect_error) {
 
 if (!function_exists('ensure_db_connection')) {
     function ensure_db_connection(&$conn) {
-        if (!($conn instanceof mysqli) || @!$conn->ping()) {
+        $is_alive = false;
+        if ($conn instanceof mysqli) {
+            try {
+                $is_alive = @$conn->ping();
+            } catch (Throwable $e) {
+                $is_alive = false;
+            }
+        }
+        if (!$is_alive) {
+            try {
+                if ($conn instanceof mysqli) {
+                    @$conn->close();
+                }
+            } catch (Throwable $e) {}
+            
             $conn = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
             if ($conn->connect_error) {
                 if (function_exists('send_api_json_response')) {
