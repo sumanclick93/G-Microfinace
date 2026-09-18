@@ -100,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             if ($amount_paid > 0) {
                 $inserted_pay = false;
                 try {
-                    $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'approved')";
+                    $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'pending')";
                     $stmt_payment = $conn->prepare($sql_payment);
                     if ($stmt_payment) {
                         $stmt_payment->bind_param("idsis", $loan_id, $amount_paid, $payment_date, $agent_id, $notes);

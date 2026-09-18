@@ -34,8 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount_paid'])) {
     if ($amount_paid > 0) {
         $conn->begin_transaction();
         try {
-            // Step A: Insert into the payments table as approved by default for agent collections
-            $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'approved')";
+            // Step A: Insert into the payments table with pending status for admin approval
+            $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'pending')";
             $stmt_payment = $conn->prepare($sql_payment);
             $stmt_payment->bind_param("idsis", $loan_id, $amount_paid, $payment_date, $agent_id, $payment_notes);
             $stmt_payment->execute();
@@ -44,24 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount_paid'])) {
             // Step B: Log this as a wallet transaction
             $sql_wallet = "INSERT INTO wallet_transactions (agent_id, loan_id, payment_id, transaction_type, amount, description) VALUES (?, ?, ?, 'emi-received', ?, ?)";
             $stmt_wallet = $conn->prepare($sql_wallet);
-            $description = "EMI received for Loan ID: $loan_id";
+            $description = "EMI received (Pending Approval) for Loan ID: $loan_id";
             $stmt_wallet->bind_param("iiids", $agent_id, $loan_id, $new_payment_id, $amount_paid, $description);
             $stmt_wallet->execute();
-            
-            // Step C: Check if the loan is now fully paid (only for flat total standard loans)
-            $total_paid_query = $conn->query("SELECT SUM(amount_paid) as total FROM payments WHERE loan_id = $loan_id");
-            $total_paid = $total_paid_query->fetch_assoc()['total'];
-            $loan_details_query = $conn->query("SELECT total_repayable_amount, interest_calculation_type FROM loans WHERE id = $loan_id");
-            $loan_meta = $loan_details_query->fetch_assoc();
-            $total_repayable = $loan_meta['total_repayable_amount'];
-            $calc_type = $loan_meta['interest_calculation_type'] ?? 'flat_total';
-
-            if ($calc_type === 'flat_total' && $total_paid >= $total_repayable) {
-                $conn->query("UPDATE loans SET status = 'paid' WHERE id = $loan_id");
-            }
 
             $conn->commit();
-            $_SESSION['message'] = "<div class='alert alert-success'>Payment logged successfully!</div>";
+            $_SESSION['message'] = "<div class='alert alert-success'>Payment logged successfully! Pending Admin approval.</div>";
 
         } catch (mysqli_sql_exception $exception) {
             $conn->rollback();
@@ -224,7 +212,9 @@ $payments_result = $stmt_payments->get_result();
 if ($payments_result->num_rows > 0) {
     while ($row = $payments_result->fetch_assoc()) {
         $payments[] = $row;
-        $total_paid += $row['amount_paid'];
+        if ($row['status'] === 'approved') {
+            $total_paid += $row['amount_paid'];
+        }
     }
 }
 $status_clean = strtolower(trim($loan['status']));
@@ -505,7 +495,44 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                             <div class="card card-table">
                                 <div class="card-body">
                                      <h5 class="card-title">Payment History</h5>
-                                     <div class="table-responsive"><table class="table"><thead><tr><th>Date</th><th>Amount Paid (₹)</th><th>Notes</th></tr></thead><tbody><?php if (empty($payments)): ?><tr><td colspan="3" class="text-center text-muted">No payments have been made yet.</td></tr><?php else: ?><?php foreach ($payments as $payment): ?><tr><td><?php echo date('d M Y, h:i A', strtotime($payment['payment_date'])); ?></td><td><?php echo number_format($payment['amount_paid'], 2); ?></td><td><?php echo htmlspecialchars($payment['notes']); ?></td></tr><?php endforeach; ?><?php endif; ?></tbody></table></div>
+                                     <div class="table-responsive">
+                                          <table class="table">
+                                              <thead>
+                                                  <tr>
+                                                      <th>Date</th>
+                                                      <th>Amount Paid (₹)</th>
+                                                      <th>Notes</th>
+                                                      <th>Status</th>
+                                                  </tr>
+                                              </thead>
+                                              <tbody>
+                                                  <?php if (empty($payments)): ?>
+                                                      <tr><td colspan="4" class="text-center text-muted">No payments have been made yet.</td></tr>
+                                                  <?php else: ?>
+                                                      <?php foreach ($payments as $payment): 
+                                                          $p_status = strtolower($payment['status'] ?? 'approved');
+                                                          if ($p_status === 'pending') {
+                                                              $badge_class = 'bg-warning text-dark';
+                                                              $badge_label = 'Pending Approval';
+                                                          } elseif ($p_status === 'rejected') {
+                                                              $badge_class = 'bg-danger';
+                                                              $badge_label = 'Rejected';
+                                                          } else {
+                                                              $badge_class = 'bg-success';
+                                                              $badge_label = 'Approved';
+                                                          }
+                                                      ?>
+                                                      <tr>
+                                                          <td><?php echo date('d M Y, h:i A', strtotime($payment['payment_date'])); ?></td>
+                                                          <td>₹<?php echo number_format($payment['amount_paid'], 2); ?></td>
+                                                          <td><?php echo htmlspecialchars($payment['notes']); ?></td>
+                                                          <td><span class="badge <?php echo $badge_class; ?>"><?php echo $badge_label; ?></span></td>
+                                                      </tr>
+                                                      <?php endforeach; ?>
+                                                  <?php endif; ?>
+                                              </tbody>
+                                          </table>
+                                      </div>
                                 </div>
                             </div>
                         </div>

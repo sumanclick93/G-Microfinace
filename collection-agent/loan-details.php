@@ -47,8 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['amount_paid'])) {
     if ($amount_paid > 0) {
         $conn->begin_transaction();
         try {
-            // Step A: Insert into payments table (status approved)
-            $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'approved')";
+            // Step A: Insert into payments table (status pending for admin approval)
+            $sql_payment = "INSERT INTO payments (loan_id, amount_paid, payment_date, collected_by_agent_id, notes, status) VALUES (?, ?, ?, ?, ?, 'pending')";
             $stmt_payment = $conn->prepare($sql_payment);
             $stmt_payment->bind_param("idsis", $loan_id, $amount_paid, $payment_date, $agent_id, $payment_notes);
             $stmt_payment->execute();

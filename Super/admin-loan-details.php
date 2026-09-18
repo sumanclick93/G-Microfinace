@@ -314,10 +314,8 @@ $payments_result = $stmt_payments->get_result();
 if ($payments_result->num_rows > 0) {
     while ($row = $payments_result->fetch_assoc()) {
         $payments[] = $row;
-        if ($row['status'] !== 'rejected') {
-            $total_paid += $row['amount_paid'];
-        }
         if ($row['status'] === 'approved') {
+            $total_paid += $row['amount_paid'];
             $paid_emis_count++;
         }
     }
@@ -610,23 +608,41 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                 <div class="card-body">
                                     <h5 class="card-title">Payment History</h5>
                                     <div class="table-responsive">
-                                        <table class="table">
-                                            <thead><tr><th>Date</th><th>Amount Paid (₹)</th><th>Notes</th></tr></thead>
-                                            <tbody>
-                                                <?php if (empty($payments)): ?>
-                                                    <tr><td colspan="3" class="text-center text-muted">No payments have been made.</td></tr>
-                                                <?php else: ?>
-                                                    <?php foreach ($payments as $payment): ?>
-                                                        <tr>
-                                                            <td><?php echo date('d M Y, h:i A', strtotime($payment['payment_date'])); ?></td>
-                                                            <td><?php echo number_format($payment['amount_paid'], 2); ?></td>
-                                                            <td><?php echo htmlspecialchars($payment['notes']); ?></td>
-                                                        </tr>
-                                                    <?php endforeach; ?>
-                                                <?php endif; ?>
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                         <table class="table">
+                                             <thead><tr><th>Date</th><th>Amount Paid (₹)</th><th>Notes</th><th>Status</th></tr></thead>
+                                             <tbody>
+                                                 <?php if (empty($payments)): ?>
+                                                     <tr><td colspan="4" class="text-center text-muted">No payments have been made.</td></tr>
+                                                 <?php else: ?>
+                                                     <?php foreach ($payments as $payment): 
+                                                         $p_status = strtolower($payment['status'] ?? 'approved');
+                                                         if ($p_status === 'pending') {
+                                                             $badge_class = 'bg-warning text-dark';
+                                                             $badge_label = 'Pending Approval';
+                                                         } elseif ($p_status === 'rejected') {
+                                                             $badge_class = 'bg-danger';
+                                                             $badge_label = 'Rejected';
+                                                         } else {
+                                                             $badge_class = 'bg-success';
+                                                             $badge_label = 'Approved';
+                                                         }
+                                                     ?>
+                                                         <tr>
+                                                             <td><?php echo date('d M Y, h:i A', strtotime($payment['payment_date'])); ?></td>
+                                                             <td>₹<?php echo number_format($payment['amount_paid'], 2); ?></td>
+                                                             <td><?php echo htmlspecialchars($payment['notes']); ?></td>
+                                                             <td>
+                                                                 <span class="badge <?php echo $badge_class; ?>"><?php echo $badge_label; ?></span>
+                                                                 <?php if ($p_status === 'pending'): ?>
+                                                                     <a href="pending-loan-payments.php" class="btn btn-xs btn-outline-primary ms-1">Review</a>
+                                                                 <?php endif; ?>
+                                                             </td>
+                                                         </tr>
+                                                     <?php endforeach; ?>
+                                                 <?php endif; ?>
+                                             </tbody>
+                                         </table>
+                                     </div>
                                 </div>
                             </div>
                         </div>

@@ -23,6 +23,22 @@ if ($conn->connect_error) {
     send_api_json_response(['status' => 'error', 'message' => 'Database connection failed: ' . $conn->connect_error], 500);
 }
 
+if (!function_exists('ensure_db_connection')) {
+    function ensure_db_connection(&$conn) {
+        if (!($conn instanceof mysqli) || @!$conn->ping()) {
+            $conn = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+            if ($conn->connect_error) {
+                if (function_exists('send_api_json_response')) {
+                    send_api_json_response(['status' => 'error', 'message' => 'Database connection failed: ' . $conn->connect_error], 500);
+                } else {
+                    die("Connection failed: " . $conn->connect_error);
+                }
+            }
+        }
+        return $conn;
+    }
+}
+
 // Start the session for login management
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

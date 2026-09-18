@@ -38,11 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['selected_accounts']))
                 if (!$check_owner || ($row_owner = $check_owner->fetch_assoc())['agent_id'] != $agent_id) {
                     continue;
                 }
-                $conn->query("INSERT INTO payments (loan_id, amount_paid, collected_by_agent_id, payment_date, status) VALUES ($account_id, $db_amount, $agent_id, '$logged_time', 'approved')");
+                $conn->query("INSERT INTO payments (loan_id, amount_paid, collected_by_agent_id, payment_date, status) VALUES ($account_id, $db_amount, $agent_id, '$logged_time', 'pending')");
                 // $conn->query("INSERT INTO loan_payments_collection (loan_id, amount_paid, collected_by_agent_id, payment_date) VALUES ($account_id, $db_amount, $agent_id, '$logged_time')");
-                $conn->query("INSERT INTO wallet_transactions (agent_id, loan_id, transaction_type, amount, description) VALUES ($agent_id, $account_id, '$trans_type', $db_amount, '$desc')");
+                $conn->query("INSERT INTO wallet_transactions (agent_id, loan_id, transaction_type, amount, description) VALUES ($agent_id, $account_id, '$trans_type', $db_amount, '$desc (Pending Approval)')");
                 // Check if the loan is now fully paid
-                $check_loan = $conn->query("SELECT l.total_repayable_amount, COALESCE(SUM(p.amount_paid), 0) as paid FROM loans l LEFT JOIN payments p ON l.id = p.loan_id WHERE l.id = $account_id AND (p.status != 'rejected' OR p.status IS NULL)");
+                $check_loan = $conn->query("SELECT l.total_repayable_amount, COALESCE(SUM(p.amount_paid), 0) as paid FROM loans l LEFT JOIN payments p ON l.id = p.loan_id WHERE l.id = $account_id AND p.status = 'approved'");
                 if ($check_loan && $row_loan = $check_loan->fetch_assoc()) {
                     if (floatval($row_loan['paid']) >= floatval($row_loan['total_repayable_amount']) && floatval($row_loan['total_repayable_amount']) > 0) {
                         $conn->query("UPDATE loans SET status = 'paid' WHERE id = $account_id AND status NOT IN ('closed', 'paid')");

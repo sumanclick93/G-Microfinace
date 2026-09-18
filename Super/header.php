@@ -11,6 +11,11 @@ $avatar_path = "assets/images/users/default-avatar.png"; // A default image
 if (isset($_SESSION['admin_id'])) {
     $admin_id = $_SESSION['admin_id'];
 
+    // Ensure database connection is active and reconnect if dropped
+    if (function_exists('ensure_db_connection')) {
+        ensure_db_connection($conn);
+    }
+
     // Prepare and execute a query to get the admin's details
     $stmt = $conn->prepare("SELECT first_name, last_name, avatar FROM admins WHERE id = ?");
     $stmt->bind_param("i", $admin_id);

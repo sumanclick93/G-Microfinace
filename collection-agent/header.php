@@ -7,6 +7,10 @@ $avatar_path = "assets/images/users/default-avatar.png";
 if (isset($_SESSION['collection_agent_id'])) {
     $agent_id = $_SESSION['collection_agent_id'];
 
+    if (function_exists('ensure_db_connection')) {
+        ensure_db_connection($conn);
+    }
+
     $stmt = $conn->prepare("SELECT first_name, last_name, avatar FROM agents WHERE id = ?");
     $stmt->bind_param("i", $agent_id);
     $stmt->execute();

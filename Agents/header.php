@@ -11,6 +11,11 @@ $avatar_path = "assets/images/users/default-avatar.png"; // A default image in c
 if (isset($_SESSION['agent_id'])) {
     $agent_id = $_SESSION['agent_id'];
 
+    // Ensure database connection is active and reconnect if dropped
+    if (function_exists('ensure_db_connection')) {
+        ensure_db_connection($conn);
+    }
+
     // Prepare and execute a query to get the agent's details from the 'agents' table
     $stmt = $conn->prepare("SELECT first_name, last_name, avatar FROM agents WHERE id = ?");
     $stmt->bind_param("i", $agent_id);
