@@ -55,12 +55,11 @@ $processing_fee_percent = (float)get_system_setting($conn, 'gold_loan_processing
 $gold_weight_grams = null;
 $gold_photo_path = null;
 $gold_rate_applied = null;
-$processing_fee = 0.00;
+$processing_fee = round(($loan_amount * $processing_fee_percent) / 100, 2);
 
 if ($loan_type === 'gold') {
     $gold_weight_grams = isset($input_data['gold_weight_grams']) ? (float)$input_data['gold_weight_grams'] : 0;
     $gold_rate_applied = $gold_rate_per_gram;
-    $processing_fee = round(($loan_amount * $processing_fee_percent) / 100, 2);
 
     $gold_valuation = $gold_weight_grams * $gold_rate_applied;
 

@@ -262,6 +262,7 @@ if ($filter_applied) {
                                                      <?php endif; ?>
                                                      <th>Agent Name</th>
                                                      <th>Loan Amount</th>
+                                                     <th>Processing Fee</th>
                                                      <?php if ($target_loan_type === 'gold'): ?>
                                                          <th>Gold Weight</th>
                                                      <?php endif; ?>
@@ -273,7 +274,7 @@ if ($filter_applied) {
                                              </thead>
                                              <tbody>
                                                  <?php
-                                                     $colspan = 8;
+                                                     $colspan = 9;
                                                      if (empty($target_loan_type)) { $colspan++; }
                                                      if ($target_loan_type === 'gold') { $colspan++; }
                                                  ?>
@@ -305,6 +306,7 @@ if ($filter_applied) {
                                                              <?php endif; ?>
                                                              <td><?php echo htmlspecialchars($loan['agent_first_name'] . ' ' . $loan['agent_last_name']); ?></td>
                                                              <td>₹<?php echo number_format($loan['loan_amount']); ?></td>
+                                                             <td>₹<?php echo number_format((float)($loan['processing_fee'] ?? 0), 2); ?></td>
                                                              <?php if ($target_loan_type === 'gold'): ?>
                                                                  <td><span class="badge bg-warning text-dark"><i class="ri-gold-line me-1"></i><?php echo floatval($loan['gold_weight_grams']); ?>g</span></td>
                                                              <?php endif; ?>

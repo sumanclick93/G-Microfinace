@@ -348,6 +348,10 @@ if (!empty($loan['gold_photo_path'])) {
                                                     <h6><?php echo !empty($loan['application_date']) ? date('d M Y', strtotime($loan['application_date'])) : 'N/A'; ?></h6>
                                                 </div>
                                                 <div class="col-sm-6">
+                                                    <p class="mb-1 text-muted">Processing Fee</p>
+                                                    <h6>₹<?php echo number_format((float)($loan['processing_fee'] ?? 0), 2); ?></h6>
+                                                </div>
+                                                <div class="col-sm-6">
                                                     <p class="mb-1 text-muted">Approval / Start Date</p>
                                                     <h6><?php echo !empty($loan['approval_date']) ? date('d M Y', strtotime($loan['approval_date'])) : 'Pending Approval'; ?></h6>
                                                 </div>

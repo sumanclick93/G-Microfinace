@@ -426,9 +426,7 @@ if (in_array($status_clean, ['closed', 'paid'])) {
                                          </li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Status:</strong> <span class="badge bg-primary"><?php echo ucfirst($loan['status']); ?></span></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Principal Amount:</strong> ₹<?php echo number_format($loan['loan_amount'], 2); ?></li>
-                                         <?php if (!empty($loan['processing_fee']) && floatval($loan['processing_fee']) > 0): ?>
-                                             <li class="list-group-item d-flex justify-content-between"><strong>Processing Fee:</strong> ₹<?php echo number_format($loan['processing_fee'], 2); ?></li>
-                                         <?php endif; ?>
+                                         <li class="list-group-item d-flex justify-content-between"><strong>Processing Fee:</strong> ₹<?php echo number_format((float)($loan['processing_fee'] ?? 0), 2); ?></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong>Total Repayable:</strong> ₹<?php echo number_format($loan['total_repayable_amount'], 2); ?></li>
                                          <li class="list-group-item d-flex justify-content-between"><strong><?php echo $is_monthly_interest ? 'Monthly Interest:' : 'Installment:'; ?></strong> ₹<?php echo number_format($loan['monthly_installment'], 2); ?> <?php if($is_monthly_interest) echo '<small class="text-muted">(Monthly Interest Only)</small>'; ?></li>
                                          <?php if ($is_monthly_interest): ?>

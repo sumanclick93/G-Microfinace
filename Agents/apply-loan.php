@@ -79,12 +79,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $gold_weight_grams = null;
     $gold_photo_path = null;
     $gold_rate_applied = null;
-    $processing_fee = 0.00;
+    $processing_fee = round(($loan_amount * $processing_fee_percent) / 100, 2);
 
     if ($loan_type === 'gold') {
         $gold_weight_grams = isset($_POST['gold_weight_grams']) ? (float)$_POST['gold_weight_grams'] : 0;
         $gold_rate_applied = $gold_rate_per_gram;
-        $processing_fee = round(($loan_amount * $processing_fee_percent) / 100, 2);
 
         // Extract any submitted files across all field names
         $file_items = [];
